@@ -1,10 +1,8 @@
 import { createContext, useCallback, useContext, useRef, useState } from "react";
 import { api } from "../api/client";
 
-// The backend only exposes GET /api/products (paginated, published items
-// only) — there's no GET /api/products/:id endpoint. This context caches
-// every product page we've fetched so product detail pages can look items
-// up by id without re-fetching, and falls back to walking pages if needed.
+// Caches every product we've fetched (from the paginated list or by id) so
+// product detail pages can reuse them without re-fetching.
 const ProductsContext = createContext(null);
 
 export function ProductsProvider({ children }) {
@@ -22,17 +20,16 @@ export function ProductsProvider({ children }) {
   const getById = useCallback(
     async (id) => {
       if (cache.current.has(id)) return cache.current.get(id);
-      let page = 1;
-      let totalPages = 1;
-      while (page <= totalPages) {
-        const res = await fetchPage(page);
-        totalPages = res.totalPages || 1;
-        if (cache.current.has(id)) return cache.current.get(id);
-        page += 1;
+      try {
+        const { data } = await api.getProduct(id);
+        cache.current.set(data.product._id, data.product);
+        setVersion((v) => v + 1);
+        return data.product;
+      } catch {
+        return null;
       }
-      return null;
     },
-    [fetchPage]
+    []
   );
 
   return (
