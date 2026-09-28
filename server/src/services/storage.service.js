@@ -13,3 +13,7 @@ export async function uploadImage(file,fileName){
     });
     return result;
 }
+
+export async function deleteFile(fileId){
+    await client.files.delete(fileId);
+}

@@ -1,11 +1,11 @@
-import productodel from "../models/product.model.js";
-import cartodel from "../models/cart.model.js";
+import productModel from "../models/product.model.js";
+import cartModel from "../models/cart.model.js";
 
 export async function addToCart(req, res) {
   const { productId } = req.params;
   const { size: productSize, quantity } = req.body;
 
-  const product = await productodel.findById(productId);
+  const product = await productModel.findById(productId);
   if (!product) {
     return res.status(404).json({ message: "Product not found" });
   }
@@ -20,8 +20,8 @@ export async function addToCart(req, res) {
   }
 
   const cart =
-    (await cartodel.findOne({ userId: req.user.id })) ??
-    (await cartodel.create({ userId: req.user.id }));
+    (await cartModel.findOne({ userId: req.user.id })) ??
+    (await cartModel.create({ userId: req.user.id }));
 
   const productInCart = cart.products.find(
     (p) => productId === p.productId.toString() && p.size === productSize
@@ -32,7 +32,7 @@ export async function addToCart(req, res) {
     if (totalQuantity > size.stock) {
       return res.status(400).json({ message: "Quantity exceeds stock" });
     }
-    await cartodel.findOneAndUpdate(
+    await cartModel.findOneAndUpdate(
       { userId: req.user.id },
       {
         $set: {
@@ -44,7 +44,7 @@ export async function addToCart(req, res) {
       }
     );
   } else {
-    await cartodel.findOneAndUpdate(
+    await cartModel.findOneAndUpdate(
       { userId: req.user.id },
       {
         $push: {
@@ -65,11 +65,11 @@ export async function removeProductFromCart(req, res) {
   const { productId } = req.params;
   const { size: productSize, quantity } = req.body;
 
-  const product = await productodel.findById(productId);
+  const product = await productModel.findById(productId);
   if (!product) {
     return res.status(404).json({ message: "Product Not Found" });
   }
-  const cart = await cartodel.findOne({ userId: req.user.id });
+  const cart = await cartModel.findOne({ userId: req.user.id });
   if (!cart) {
     return res.status(400).json({ message: "Cart is empty" });
   }
@@ -80,7 +80,7 @@ export async function removeProductFromCart(req, res) {
     return res.status(404).json({ message: "Product not found in cart" });
   }
   if (productInCart.quantity <= quantity) {
-    await cartodel.findOneAndUpdate(
+    await cartModel.findOneAndUpdate(
       { userId: req.user.id },
       {
         $pull: {
@@ -93,7 +93,7 @@ export async function removeProductFromCart(req, res) {
     );
   } else {
     const newQuantity = productInCart.quantity - quantity;
-    await cartodel.findOneAndUpdate(
+    await cartModel.findOneAndUpdate(
       { userId: req.user.id },
       {
         $set: {
@@ -112,8 +112,18 @@ export async function removeProductFromCart(req, res) {
 export async function getCart(req, res) {
   const user = req.user;
   const cart =
-    (await cartodel.findOne({ userId: user.id }).populate("products.productId")) ||
-    (await cartodel.create({ userId: user.id }));
+    (await cartModel.findOne({ userId: user.id }).populate("products.productId")) ||
+    (await cartModel.create({ userId: user.id }));
+
+  // drop items whose product has since been deleted
+  const missing = cart.products.filter((item) => !item.productId);
+  if (missing.length > 0) {
+    cart.products = cart.products.filter((item) => item.productId);
+    await cartModel.updateOne(
+      { userId: user.id },
+      { $pull: { products: { _id: { $in: missing.map((item) => item._id) } } } }
+    );
+  }
 
   const totalPrice = cart.products.reduce((total, item) => {
     return total + item.productId.price.amount * item.quantity;

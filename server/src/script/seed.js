@@ -5,7 +5,7 @@
 // Pexels, a free stock-photo CDN that allows direct hotlinking).
 //
 // Usage:
-//   node src/scripts/seed.js
+//   npm run seed   (or: node src/script/seed.js)
 //
 // Safe to re-run: it upserts the seed users by email and replaces only the
 // products owned by those two seed sellers, so it won't create duplicates.

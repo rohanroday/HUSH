@@ -6,8 +6,8 @@ export const createProductValidator = [
     .trim()
     .notEmpty()
     .withMessage("Title is required")
-    .isLength({ min: 3 })
-    .withMessage("Title must be between 3 and 20 characters"),
+    .isLength({ min: 3, max: 60 })
+    .withMessage("Title must be between 3 and 60 characters"),
   body("description")
     .notEmpty()
     .withMessage("Description is required")
@@ -39,7 +39,7 @@ export const createProductValidator = [
     .notEmpty()
     .withMessage("Size is required")
     .isIn(["XS", "S", "M", "L", "XL", "XXL"])
-    .withMessage("Size must be S, M, or L"),
+    .withMessage("Size must be one of XS, S, M, L, XL, XXL"),
   body("sizes.*.stock")
     .isInt({ min: 0 })
     .withMessage("Stock must be an integer")
@@ -54,8 +54,8 @@ export const updateProductValidator = [
     .trim()
     .notEmpty()
     .withMessage("Title is required")
-    .isLength({ min: 3, max: 20 })
-    .withMessage("Title must be between 3 and 20 characters"),
+    .isLength({ min: 3, max: 60 })
+    .withMessage("Title must be between 3 and 60 characters"),
   body("description")
     .optional()
     .trim()
@@ -101,7 +101,7 @@ export const updateProductValidator = [
     .notEmpty()
     .withMessage("Size is required")
     .isIn(["XS", "S", "M", "L", "XL", "XXL"])
-    .withMessage("Size must be S, M, or L"),
+    .withMessage("Size must be one of XS, S, M, L, XL, XXL"),
   body("sizes.*.stock")
     .optional()
     .trim()

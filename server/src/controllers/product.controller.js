@@ -1,5 +1,11 @@
 import productModel from "../models/product.model.js";
-import {uploadImage} from "../services/storage.service.js"
+import {uploadImage,deleteFile} from "../services/storage.service.js"
+
+// Keeps ?page= within 1..totalPages (and handles missing / non-numeric values)
+function clampPage(rawPage,totalPages){
+    const page = parseInt(rawPage) || 1;
+    return Math.max(1,Math.min(page,Math.max(totalPages,1)));
+}
 
 export async function createProduct(req,res){
 
@@ -135,7 +141,7 @@ export async function getProducts(req,res){
 
     const totalPages = Math.ceil(totalProduct/20);
 
-    const page = req.query.page ? Math.min(parseInt(req.query.page),totalPages) : 1;
+    const page = clampPage(req.query.page,totalPages);
 
     const skip = (page-1)*20;
 
@@ -149,6 +155,20 @@ export async function getProducts(req,res){
             totalPages:totalPages,
             currentPage:page
         }
+    })
+}
+
+export async function getProductById(req,res){
+    const product = await productModel.findOne({
+        _id:req.params.id,
+        isPublished:true
+    });
+    if(!product){
+        return res.status(404).json({message:"Product not found"});
+    }
+    res.status(200).json({
+        message:"product feteched successfully",
+        data:{product}
     })
 }
 
@@ -203,6 +223,19 @@ export async function deleteImage(req,res){
             message:"Only authenticated sellers can delete images"
         })
     }
+    const image = product.images.find((img)=>img.imageKitId === imageId);
+    if(!image){
+        return res.status(404).json({
+            message:"Image not found"
+        })
+    }
+    try{
+        await deleteFile(imageId);
+    }catch(err){
+        // the file may already be gone from ImageKit (or be seed data that was
+        // never uploaded there); still remove it from the product
+        console.warn(`ImageKit delete failed for ${imageId}: ${err.message}`);
+    }
     await productModel.findByIdAndUpdate({
         _id:productId
     },{
@@ -227,8 +260,8 @@ export async function getProductsBySeller(req,res){
         seller:user.id
     })
 
-    const totalPages = Math.ceil(products/5);
-    const page = req.query.page ? Math.min(parseInt(req.query.page),totalPages) : 1;
+    const totalPages = Math.ceil(totalProduct/5);
+    const page = clampPage(req.query.page,totalPages);
     const skip = (page-1)*5;
     const products  = await productModel.find({
         seller:user.id
