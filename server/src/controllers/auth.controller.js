@@ -19,7 +19,7 @@ export async function registerUser(req, res) {
     email,
     passwordHash: hashedPassword,
   });
-  const token = jwt.sign({ id: user._id, role: user.role }, config.JWT_SECRET);
+  const token = jwt.sign({ id: user._id, role: user.role }, config.JWT_SECRET, { expiresIn: "7d" });
   res.status(201).json({
     message: "User registered successfully",
     user: {
@@ -47,7 +47,7 @@ export async function loginUser(req, res) {
       .json({ message: "Email or password is incorrect"});
   }
 
-  const token = jwt.sign({ id: user._id, role: user.role }, config.JWT_SECRET);
+  const token = jwt.sign({ id: user._id, role: user.role }, config.JWT_SECRET, { expiresIn: "7d" });
   res.status(200).json({
     message: "User logged in successfully",
     user: {
@@ -62,6 +62,9 @@ export async function loginUser(req, res) {
 export async function getMe(req, res) {
   try {
     const user = await userModel.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
     res.status(200).json({ message: "User fetched successfully", user:{
         id:user.id,
         name:user.name,

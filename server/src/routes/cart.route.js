@@ -8,7 +8,7 @@ const router = Router();
 
 router.use(authenticate);
 router.post("/add/product/:productId",addToCartValidator,addToCart);
-router.delete("/remove/product/:productid",removeCartValidator,removeProductFromCart);
+router.delete("/remove/product/:productId",removeCartValidator,removeProductFromCart);
 
 router.get("/",getCart)
 
