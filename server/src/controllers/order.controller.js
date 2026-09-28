@@ -1,6 +1,7 @@
 import orderModel from "../models/order.model.js";
 import cartModel from "../models/cart.model.js";
 import productModel from "../models/product.model.js";
+import userModel from "../models/user.model.js";
 
 const ORDER_STATUSES = ["PLACED", "SHIPPED", "DELIVERED", "PENDING", "CANCELLED"];
 
@@ -112,6 +113,42 @@ export async function getOrders(req, res) {
   const user = req.user;
   const orders = await orderModel.find({ userId: user.id }).sort({ createdAt: -1 });
   return res.status(200).json({ message: "Orders fetched successfully", data: { orders } });
+}
+
+export async function getSellerOrders(req, res) {
+  const user = req.user;
+  if (user.role !== "seller") {
+    return res.status(403).json({ message: "Only sellers can view their orders" });
+  }
+  const sellerProducts = await productModel.find({ seller: user.id }).select("_id");
+  const productIds = sellerProducts.map((p) => p._id.toString());
+
+  const orders = await orderModel
+    .find({ "products.product.productId": { $in: productIds } })
+    .sort({ createdAt: -1 })
+    .lean();
+
+  const customers = await userModel
+    .find({ _id: { $in: [...new Set(orders.map((o) => o.userId.toString()))] } })
+    .select("name email")
+    .lean();
+  const customerById = new Map(customers.map((c) => [c._id.toString(), c]));
+
+  // only show the seller the line items that are theirs
+  const data = orders.map((order) => {
+    const products = order.products.filter((p) =>
+      productIds.includes(p.product.productId.toString())
+    );
+    const customer = customerById.get(order.userId.toString());
+    return {
+      ...order,
+      products,
+      sellerTotal: products.reduce((acc, p) => acc + p.product.price.amount * p.quantity, 0),
+      customer: customer ? { name: customer.name, email: customer.email } : null,
+    };
+  });
+
+  return res.status(200).json({ message: "Orders fetched successfully", data: { orders: data } });
 }
 
 export async function cancelOrder(req, res) {

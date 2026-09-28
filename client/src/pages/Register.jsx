@@ -1,11 +1,13 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { Field } from "./Login";
+import { LOOKS } from "../data/lookbook";
+import { AuthLayout, Field } from "./Login";
 
 export default function Register() {
   const { register } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [form, setForm] = useState({ name: "", email: "", password: "" });
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -18,7 +20,7 @@ export default function Register() {
     setError("");
     try {
       await register(form.name, form.email, form.password);
-      navigate("/profile");
+      navigate(location.state?.from || "/profile");
     } catch (err) {
       setError(err.message);
     } finally {
@@ -27,40 +29,43 @@ export default function Register() {
   };
 
   return (
-    <div className="mx-auto flex min-h-[70vh] max-w-md flex-col justify-center px-4 py-16 sm:px-6">
-      <p className="font-display text-2xl font-extrabold text-ink">HUSH</p>
-      <h1 className="mt-6 text-xl font-semibold text-ink">Create an account</h1>
-      <p className="mt-1 text-sm text-stone">Join HUSH for a faster checkout and order tracking.</p>
-
-      <form onSubmit={submit} className="mt-8 space-y-4">
-        <Field label="Full name" value={form.name} onChange={set("name")} required />
-        <Field label="Email address" type="email" value={form.email} onChange={set("email")} required />
+    <AuthLayout
+      look={LOOKS.hoodiePair}
+      title="Join HUSH"
+      subtitle="Save your bag, check out faster and follow every order from the studio to your door."
+      footer={
+        <>
+          Already have an account?{" "}
+          <Link to="/login" state={location.state} className="font-medium text-ink underline underline-offset-4">
+            Sign in
+          </Link>
+        </>
+      }
+    >
+      <form onSubmit={submit} className="space-y-5">
+        <Field label="Full name" autoComplete="name" value={form.name} onChange={set("name")} required minLength={3} maxLength={20} />
+        <Field label="Email address" type="email" autoComplete="email" value={form.email} onChange={set("email")} required />
         <Field
           label="Password"
           type="password"
+          autoComplete="new-password"
           value={form.password}
           onChange={set("password")}
           required
+          minLength={6}
           hint="At least 6 characters."
         />
 
-        {error && <p className="text-sm text-red-700">{error}</p>}
+        {error && (
+          <p role="alert" className="border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-900">
+            {error}
+          </p>
+        )}
 
-        <button
-          type="submit"
-          disabled={submitting}
-          className="w-full bg-ink py-3 text-sm font-semibold text-cream hover:opacity-90 disabled:opacity-50"
-        >
-          {submitting ? "Creating account…" : "Create account"}
+        <button type="submit" disabled={submitting} className="btn btn-primary w-full py-4!">
+          {submitting ? "Creating your account…" : "Create account"}
         </button>
       </form>
-
-      <p className="mt-6 text-center text-sm text-stone">
-        Already have an account?{" "}
-        <Link to="/login" className="font-medium text-ink underline">
-          Sign in
-        </Link>
-      </p>
-    </div>
+    </AuthLayout>
   );
 }

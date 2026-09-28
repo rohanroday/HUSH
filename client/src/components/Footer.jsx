@@ -1,63 +1,74 @@
 import { Link } from "react-router-dom";
 
+const GROUPS = [
+  {
+    title: "Shop",
+    links: [
+      ["Everything", "/shop"],
+      ["Jackets", "/shop?category=Jackets"],
+      ["T-Shirts", "/shop?category=T-Shirts"],
+      ["Hoodies", "/shop?category=Hoodies"],
+      ["Jeans", "/shop?category=Jeans"],
+    ],
+  },
+  {
+    title: "Help",
+    links: [
+      ["Contact us", "/contact"],
+      ["Shipping & returns", "/about"],
+      ["Track an order", "/profile?tab=orders"],
+    ],
+  },
+  {
+    title: "Account",
+    links: [
+      ["Sign in", "/login"],
+      ["Create account", "/register"],
+      ["Your bag", "/cart"],
+    ],
+  },
+];
+
 export default function Footer() {
   return (
-    <footer className="border-t border-line bg-cream-dark">
-      <div className="mx-auto grid max-w-7xl gap-10 px-4 py-14 sm:px-6 md:grid-cols-4 lg:px-8">
-        <div>
-          <p className="font-display text-2xl font-extrabold text-ink">HUSH</p>
-          <p className="mt-3 max-w-xs text-sm text-stone">
-            Minimal fashion designed for everyday confidence.
+    <footer className="mt-24 bg-ink text-cream">
+      <div className="mx-auto grid max-w-360 gap-12 px-4 pb-10 pt-20 sm:px-6 md:grid-cols-[1.4fr_repeat(3,1fr)] lg:px-10">
+        <div className="max-w-xs">
+          <p className="text-lg font-medium leading-snug">
+            Quiet clothes, cut well and made to be worn on repeat.
           </p>
+          <Link to="/shop" className="link-draw mt-6 inline-block text-sm text-cream/80 hover:text-cream">
+            Browse the full collection →
+          </Link>
         </div>
-        <FooterCol
-          title="Shop"
-          links={[
-            ["New Arrivals", "/shop"],
-            ["Men", "/shop?category=Men"],
-            ["Women", "/shop?category=Women"],
-            ["Jackets", "/shop?category=Jackets"],
-          ]}
-        />
-        <FooterCol
-          title="Support"
-          links={[
-            ["Contact", "/contact"],
-            ["Returns", "/about"],
-            ["Shipping", "/about"],
-            ["Size Guide", "/shop"],
-          ]}
-        />
-        <FooterCol
-          title="Account"
-          links={[
-            ["Sign in", "/login"],
-            ["Create account", "/register"],
-            ["My orders", "/profile"],
-            ["Cart", "/cart"],
-          ]}
-        />
+        {GROUPS.map((group) => (
+          <div key={group.title}>
+            <p className="text-[11px] uppercase tracking-[0.16em] text-cream/50">{group.title}</p>
+            <ul className="mt-4 space-y-2.5">
+              {group.links.map(([label, to]) => (
+                <li key={label}>
+                  <Link to={to} className="link-draw text-sm text-cream/85 hover:text-cream">
+                    {label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
       </div>
-      <div className="border-t border-line px-4 py-5 text-center text-xs text-stone sm:px-6 lg:px-8">
-        © {new Date().getFullYear()} HUSH. All rights reserved.
+
+      <div className="overflow-hidden px-2" aria-hidden="true">
+        <p className="font-display select-none text-center text-[31vw] font-black leading-[0.72] tracking-[-0.04em] text-cream/[0.07]">
+          HUSH
+        </p>
+      </div>
+
+      <div className="border-t border-cream/10">
+        <div className="mx-auto flex max-w-360 flex-wrap items-center justify-between gap-3 px-4 py-6 text-xs text-cream/50 sm:px-6 lg:px-10">
+          <p>© {new Date().getFullYear()} HUSH. All rights reserved.</p>
+          <p>Lookbook photography via Pexels.</p>
+        </div>
       </div>
     </footer>
-  );
-}
-
-function FooterCol({ title, links }) {
-  return (
-    <div>
-      <p className="text-sm font-semibold text-ink">{title}</p>
-      <ul className="mt-3 space-y-2">
-        {links.map(([label, to]) => (
-          <li key={label}>
-            <Link to={to} className="text-sm text-stone hover:text-ink">
-              {label}
-            </Link>
-          </li>
-        ))}
-      </ul>
-    </div>
   );
 }

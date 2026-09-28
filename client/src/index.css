@@ -2,20 +2,36 @@
 
 @theme {
   --font-display: "Archivo", "Helvetica Neue", Arial, sans-serif;
-  --font-sans: "Inter", "Helvetica Neue", Arial, sans-serif;
+  --font-sans: "Geist", "Helvetica Neue", Arial, sans-serif;
 
-  --color-cream: #f4f0e8;
-  --color-cream-dark: #ece5d8;
-  --color-ink: #16140f;
-  --color-ink-soft: #383429;
-  --color-stone: #8a8272;
-  --color-line: #ddd5c4;
-  --color-clay: #a8632f;
-  --color-olive: #5c5a41;
+  /* Warm stone neutrals pulled from the studio-grey of the lookbook photos,
+     one ink, one rust accent. Token names are kept so every page inherits. */
+  --color-cream: #efebe4;
+  --color-cream-dark: #e4ded3;
+  --color-paper: #f7f5f1;
+  --color-ink: #151411;
+  --color-ink-soft: #35322b;
+  --color-stone: #676157;
+  --color-line: #d6cfc3;
+  --color-clay: #9a4a22;
+  --color-olive: #4f513c;
+
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+
+  --animate-marquee: marquee 38s linear infinite;
+}
+
+@keyframes marquee {
+  to {
+    transform: translateX(-50%);
+  }
 }
 
 html {
   scroll-behavior: smooth;
+  scrollbar-color: var(--color-stone) var(--color-cream-dark);
 }
 
 body {
@@ -23,6 +39,7 @@ body {
   color: var(--color-ink);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 ::selection {
@@ -30,8 +47,155 @@ body {
   color: var(--color-cream);
 }
 
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-cream-dark);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-stone);
+  border: 3px solid var(--color-cream-dark);
+  border-radius: 999px;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-ink);
+  outline-offset: 3px;
+}
+
+input,
+textarea,
+select {
+  caret-color: var(--color-clay);
+}
+
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+}
+
+p {
+  text-wrap: pretty;
+}
+
+/* Condensed, heavy display voice — Archivo's width axis does the work. */
 .font-display {
   font-family: var(--font-display);
+  font-stretch: 72%;
+  letter-spacing: -0.02em;
+}
+.font-display-wide {
+  font-family: var(--font-display);
+  font-stretch: 112%;
+  letter-spacing: 0.08em;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Component classes live in the components layer so utilities (hidden,
+   lg:hidden, w-full, …) can still override them. */
+@layer components {
+/* ---------- Buttons ---------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 0.95rem 1.6rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  transition:
+    background-color 200ms ease,
+    color 200ms ease,
+    border-color 200ms ease,
+    transform 160ms var(--ease-out);
+}
+.btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.btn-primary {
+  background: var(--color-ink);
+  color: var(--color-cream);
+}
+.btn-light {
+  background: var(--color-paper);
+  color: var(--color-ink);
+}
+.btn-outline {
+  border: 1px solid var(--color-ink);
+  color: var(--color-ink);
+}
+@media (hover: hover) and (pointer: fine) {
+  .btn-primary:hover:not(:disabled) {
+    background: var(--color-ink-soft);
+  }
+  .btn-light:hover:not(:disabled) {
+    background: var(--color-cream);
+  }
+  .btn-outline:hover:not(:disabled) {
+    background: var(--color-ink);
+    color: var(--color-cream);
+  }
+  .btn .btn-arrow {
+    transition: transform 240ms var(--ease-out);
+  }
+  .btn:hover .btn-arrow {
+    transform: translateX(4px);
+  }
+}
+
+/* Underline link that draws in from the left. */
+.link-draw {
+  background-image: linear-gradient(currentColor, currentColor);
+  background-size: 0% 1px;
+  background-position: 0 100%;
+  background-repeat: no-repeat;
+  transition: background-size 320ms var(--ease-out);
+  padding-bottom: 2px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .link-draw:hover {
+    background-size: 100% 1px;
+  }
+}
+
+/* ---------- Form fields ---------- */
+.field {
+  width: 100%;
+  border: 1px solid var(--color-line);
+  background: var(--color-paper);
+  padding: 0.8rem 0.9rem;
+  font-size: 0.875rem;
+  color: var(--color-ink);
+  transition:
+    border-color 180ms ease,
+    background-color 180ms ease;
+}
+.field::placeholder {
+  color: var(--color-stone);
+}
+.field:focus {
+  outline: none;
+  border-color: var(--color-ink);
+  background: #fff;
+}
 }
 
 /* Custom range input for price filter */
@@ -45,23 +209,118 @@ input[type="range"] {
 input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   border-radius: 999px;
   background: var(--color-ink);
   cursor: pointer;
-  border: 2px solid var(--color-cream);
+  border: 3px solid var(--color-cream);
   box-shadow: 0 0 0 1px var(--color-ink);
 }
 
-:focus-visible {
-  outline: 2px solid var(--color-ink);
-  outline-offset: 2px;
+/* ---------- Motion ---------- */
+
+/* Scroll reveal: content is visible by default; JS opts it into the effect. */
+.js-reveal [data-reveal] {
+  opacity: 0;
+  transform: translateY(28px);
+  filter: blur(6px);
+  transition:
+    opacity 900ms var(--ease-out),
+    transform 900ms var(--ease-out),
+    filter 900ms var(--ease-out);
+  transition-delay: calc(var(--reveal-i, 0) * 90ms);
+}
+.js-reveal [data-reveal].is-visible {
+  opacity: 1;
+  transform: none;
+  filter: none;
 }
 
-.line-clamp-2 {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+/* Hero entrance: photographs unmask upward, the wordmark rises behind them. */
+@keyframes unmask {
+  from {
+    clip-path: inset(100% 0 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+@keyframes settle {
+  from {
+    transform: scale(1.14);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+@keyframes rise {
+  from {
+    transform: translateY(105%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.hero-mask {
+  animation: unmask 1300ms var(--ease-in-out) both;
+  animation-delay: var(--d, 0ms);
+}
+.hero-mask > img {
+  animation: settle 1900ms var(--ease-out) both;
+  animation-delay: var(--d, 0ms);
+}
+.hero-rise {
+  animation: rise 1100ms var(--ease-out) both;
+  animation-delay: var(--d, 0ms);
+}
+.hero-fade {
+  animation: fade-up 900ms var(--ease-out) both;
+  animation-delay: var(--d, 0ms);
+}
+
+/* Product imagery: gentle zoom on hover, second photo crossfades in. */
+.card-media img {
+  transition:
+    transform 900ms var(--ease-out),
+    opacity 500ms ease;
+}
+@media (hover: hover) and (pointer: fine) {
+  .card-media:hover img {
+    transform: scale(1.04);
+  }
+  .card-media:hover .card-alt {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .js-reveal [data-reveal] {
+    opacity: 1;
+    transform: none;
+    filter: none;
+    transition: none;
+  }
+  .hero-mask,
+  .hero-mask > img,
+  .hero-rise,
+  .hero-fade {
+    animation: none;
+  }
+  .animate-marquee {
+    animation: none;
+  }
 }

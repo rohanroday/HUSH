@@ -5,32 +5,30 @@ import { useAuth } from "../context/AuthContext";
 import { formatPrice } from "../components/ProductCard";
 
 const SHIPPING = 99;
-const DISCOUNT = 0;
-// hjsdbjh
+
 export default function Cart() {
   const { user } = useAuth();
-  const { items, totalPrice, loading, error, addItem, removeItem, refresh } = useCart();
+  const { items, totalPrice, loading, error, addItem, removeItem } = useCart();
   const navigate = useNavigate();
   const [busyKey, setBusyKey] = useState(null);
   const [actionError, setActionError] = useState("");
 
   if (!user) {
     return (
-      <div className="mx-auto max-w-xl px-4 py-24 text-center">
-        <h1 className="font-display text-2xl font-bold text-ink">Sign in to view your cart</h1>
-        <p className="mt-2 text-sm text-stone">Your cart is tied to your HUSH account.</p>
-        <Link
-          to="/login"
-          state={{ from: "/cart" }}
-          className="mt-6 inline-block bg-ink px-6 py-3 text-sm font-semibold text-cream hover:opacity-90"
-        >
-          Sign in
-        </Link>
-      </div>
+      <EmptyState
+        title="Your bag"
+        body="Your bag is saved to your HUSH account, so it follows you across devices."
+        action={
+          <Link to="/login" state={{ from: "/cart" }} className="btn btn-primary">
+            Sign in to see it
+          </Link>
+        }
+      />
     );
   }
 
   const keyFor = (item) => `${item.productId?._id}-${item.size}`;
+  const count = items.reduce((n, i) => n + i.quantity, 0);
 
   const changeQty = async (item, delta) => {
     const key = keyFor(item);
@@ -63,76 +61,81 @@ export default function Cart() {
   };
 
   const subtotal = totalPrice;
-  const total = Math.max(0, subtotal + (items.length ? SHIPPING : 0) - DISCOUNT);
+  const total = subtotal + (items.length ? SHIPPING : 0);
+
+  if (!loading && !error && items.length === 0) {
+    return (
+      <EmptyState
+        title="Your bag is empty"
+        body="Nothing in here yet. A heavyweight tee is a good place to start."
+        action={
+          <Link to="/shop" className="btn btn-primary">
+            Browse the collection
+          </Link>
+        }
+      />
+    );
+  }
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:px-8">
-      <h1 className="font-display mb-8 text-3xl font-extrabold text-ink">
-        Your cart {items.length > 0 && `(${items.length})`}
-      </h1>
+    <div className="mx-auto max-w-360 px-4 pb-8 pt-10 sm:px-6 lg:px-10 lg:pt-14">
+      <header className="mb-10 flex items-end justify-between gap-4 border-b border-ink pb-6">
+        <h1 className="font-display text-6xl font-black uppercase leading-[0.85] text-ink sm:text-7xl">Your bag</h1>
+        {count > 0 && <p className="tabular text-sm text-stone">{count} {count === 1 ? "item" : "items"}</p>}
+      </header>
 
-      {loading && <p className="text-sm text-stone">Loading cart…</p>}
-      {error && (
-        <p className="mb-6 rounded-md border border-line bg-cream-dark p-4 text-sm text-stone">
-          Couldn't load your cart: {error}
+      {loading && items.length === 0 && <p className="text-sm text-stone">Loading your bag…</p>}
+      {(error || actionError) && (
+        <p role="alert" className="mb-6 border border-red-200 bg-red-50 p-4 text-sm text-red-900">
+          {error ? `We couldn't load your bag: ${error}` : actionError}
         </p>
-      )}
-      {actionError && (
-        <p className="mb-6 rounded-md border border-line bg-cream-dark p-4 text-sm text-stone">
-          {actionError}
-        </p>
-      )}
-
-      {!loading && !error && items.length === 0 && (
-        <div className="rounded-md border border-line bg-cream-dark p-10 text-center">
-          <p className="text-sm text-stone">Your cart is empty.</p>
-          <Link to="/shop" className="mt-4 inline-block border border-ink px-5 py-2.5 text-sm font-semibold text-ink hover:bg-ink hover:text-cream">
-            Continue shopping
-          </Link>
-        </div>
       )}
 
       {items.length > 0 && (
-        <div className="grid gap-10 md:grid-cols-[1fr_320px]">
-          <ul className="divide-y divide-line border-y border-line">
+        <div className="grid gap-12 lg:grid-cols-12">
+          <ul className="divide-y divide-line lg:col-span-8">
             {items.map((item) => {
               const key = keyFor(item);
               const busy = busyKey === key;
               const product = item.productId;
               const maxStock = product?.sizes?.find((s) => s.size === item.size)?.stock ?? 99;
               return (
-                <li key={key} className="flex gap-4 py-5">
-                  <div className="h-20 w-16 flex-shrink-0 overflow-hidden bg-cream-dark">
+                <li key={key} className={`flex gap-5 py-6 transition-opacity first:pt-0 ${busy ? "opacity-60" : ""}`}>
+                  <Link to={`/product/${product?._id}`} className="h-36 w-28 shrink-0 overflow-hidden bg-cream-dark sm:h-44 sm:w-36">
                     {product?.images?.[0]?.url && (
-                      <img src={product.images[0].url} alt="" className="h-full w-full object-cover" />
+                      <img src={product.images[0].url} alt={product.title} className="h-full w-full object-cover" />
                     )}
-                  </div>
-                  <div className="flex flex-1 flex-col justify-between">
-                    <div>
-                      <Link to={`/product/${product?._id}`} className="text-sm font-medium text-ink hover:underline">
-                        {product?.title ?? "Product"}
-                      </Link>
-                      <p className="mt-1 text-sm text-stone">{formatPrice(product?.price)}</p>
-                      <p className="mt-1 text-xs text-stone">{item.size}</p>
+                  </Link>
+                  <div className="flex min-w-0 flex-1 flex-col justify-between">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0">
+                        <Link to={`/product/${product?._id}`} className="text-base font-medium text-ink hover:underline">
+                          {(product?.title ?? "Product").replace(/^Men /, "")}
+                        </Link>
+                        <p className="mt-1 text-sm text-stone">Size {item.size}</p>
+                      </div>
+                      <p className="tabular shrink-0 text-base font-medium text-ink">
+                        {formatPrice(product && { ...product.price, amount: product.price.amount * item.quantity })}
+                      </p>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center border border-line">
+                    <div className="mt-4 flex items-center justify-between gap-3">
+                      <div className="flex h-10 items-center border border-line bg-paper">
                         <button
                           type="button"
                           disabled={busy}
                           onClick={() => changeQty(item, -1)}
-                          className="flex h-8 w-8 items-center justify-center text-ink disabled:opacity-40"
-                          aria-label="Decrease quantity"
+                          className="flex h-full w-10 items-center justify-center text-ink disabled:opacity-30"
+                          aria-label={`Decrease quantity of ${product?.title}`}
                         >
                           −
                         </button>
-                        <span className="w-7 text-center text-sm">{item.quantity}</span>
+                        <span className="tabular w-8 text-center text-sm">{item.quantity}</span>
                         <button
                           type="button"
                           disabled={busy || item.quantity >= maxStock}
                           onClick={() => changeQty(item, 1)}
-                          className="flex h-8 w-8 items-center justify-center text-ink disabled:opacity-40"
-                          aria-label="Increase quantity"
+                          className="flex h-full w-10 items-center justify-center text-ink disabled:opacity-30"
+                          aria-label={`Increase quantity of ${product?.title}`}
                         >
                           +
                         </button>
@@ -141,10 +144,9 @@ export default function Cart() {
                         type="button"
                         disabled={busy}
                         onClick={() => removeLine(item)}
-                        aria-label="Remove item"
-                        className="text-stone hover:text-ink disabled:opacity-40"
+                        className="link-draw text-xs font-medium text-stone hover:text-ink disabled:opacity-40"
                       >
-                        <TrashIcon />
+                        Remove
                       </button>
                     </div>
                   </div>
@@ -153,54 +155,48 @@ export default function Cart() {
             })}
           </ul>
 
-          <div className="h-fit border border-line p-6">
-            <h2 className="text-sm font-semibold text-ink">Order summary</h2>
-            <dl className="mt-4 space-y-3 text-sm">
-              <Row label="Subtotal" value={`₹${subtotal.toLocaleString("en-IN")}`} />
-              <Row label="Shipping" value={`₹${SHIPPING}`} />
-              {DISCOUNT > 0 && <Row label="Discount" value={`−₹${DISCOUNT}`} highlight />}
-              <div className="border-t border-line pt-3">
-                <Row label="Total" value={`₹${total.toLocaleString("en-IN")}`} bold />
-              </div>
-            </dl>
-            <button
-              type="button"
-              onClick={() => navigate("/checkout")}
-              className="mt-6 w-full bg-ink py-3 text-sm font-semibold text-cream hover:opacity-90"
-            >
-              Proceed to checkout
-            </button>
-            <Link
-              to="/shop"
-              className="mt-3 block text-center text-xs text-stone hover:text-ink"
-            >
-              ← Continue shopping
-            </Link>
-            <p className="mt-6 text-center text-[11px] text-stone">
-              Cards · UPI · Netbanking accepted at checkout
-            </p>
-          </div>
+          <aside className="lg:col-span-4">
+            <div className="bg-paper p-6 lg:sticky lg:top-24 lg:p-8">
+              <h2 className="text-sm font-semibold text-ink">Order summary</h2>
+              <dl className="tabular mt-6 space-y-3 text-sm">
+                <Row label="Subtotal" value={`₹${subtotal.toLocaleString("en-IN")}`} />
+                <Row label="Standard shipping" value={`₹${SHIPPING}`} />
+                <div className="border-t border-line pt-4">
+                  <Row label="Total" value={`₹${total.toLocaleString("en-IN")}`} bold />
+                </div>
+              </dl>
+              <button type="button" onClick={() => navigate("/checkout")} className="btn btn-primary mt-8 w-full py-4!">
+                Continue to checkout
+              </button>
+              <Link to="/shop" className="link-draw mx-auto mt-4 block w-fit text-xs text-stone hover:text-ink">
+                Keep shopping
+              </Link>
+              <p className="mt-8 border-t border-line pt-5 text-xs leading-relaxed text-stone">
+                Unworn pieces can be returned within 7 days of delivery.
+              </p>
+            </div>
+          </aside>
         </div>
       )}
     </div>
   );
 }
 
-function Row({ label, value, bold, highlight }) {
+function EmptyState({ title, body, action }) {
   return (
-    <div className="flex items-center justify-between">
-      <dt className={`text-stone ${bold ? "font-semibold text-ink" : ""}`}>{label}</dt>
-      <dd className={`${bold ? "text-base font-semibold text-ink" : highlight ? "text-clay" : "text-ink"}`}>
-        {value}
-      </dd>
+    <div className="mx-auto max-w-360 px-4 py-24 sm:px-6 lg:px-10 lg:py-32">
+      <h1 className="font-display text-6xl font-black uppercase leading-[0.85] text-ink sm:text-7xl">{title}</h1>
+      <p className="mt-5 max-w-md text-sm leading-relaxed text-stone">{body}</p>
+      <div className="mt-8">{action}</div>
     </div>
   );
 }
 
-function TrashIcon() {
+function Row({ label, value, bold }) {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <path d="M4 7h16M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2m-8 0 1 13a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2l1-13" />
-    </svg>
+    <div className="flex items-center justify-between">
+      <dt className={bold ? "font-semibold text-ink" : "text-stone"}>{label}</dt>
+      <dd className={bold ? "text-lg font-semibold text-ink" : "text-ink"}>{value}</dd>
+    </div>
   );
 }
