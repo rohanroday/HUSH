@@ -1,4 +1,4 @@
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000/api";
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
 
 function getToken() {
   return localStorage.getItem("hush_token");
@@ -44,6 +44,7 @@ export const api = {
   me: () => request("/auth/me"),
 
   getProducts: (page = 1) => request(`/products?page=${page}`),
+  getProduct: (id) => request(`/products/${id}`),
   getSellerProducts: (page = 1) => request(`/products/seller?page=${page}`),
   createProduct: (formData) => request("/products/create", { method: "POST", body: formData, isFormData: true }),
   updateProduct: (id, formData) => request(`/products/update/${id}`, { method: "PATCH", body: formData, isFormData: true }),
@@ -56,10 +57,6 @@ export const api = {
   removeFromCart: (productId, size, quantity = 1) =>
     request(`/cart/remove/product/${productId}`, { method: "DELETE", body: { size, quantity } }),
 
-  // NOTE: the backend's order routes are not currently mounted in
-  // src/app/app.js (and order.validator.js has a syntax error), so these
-  // calls will fail until that's fixed server-side. They're wired up here
-  // so the UI is ready the moment the backend is.
   createOrder: (address) => request("/orders", { method: "POST", body: { address } }),
   getOrders: () => request("/orders"),
   cancelOrder: (orderId) => request(`/orders/cancel/${orderId}`, { method: "PATCH" }),
