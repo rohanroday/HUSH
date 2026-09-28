@@ -260,12 +260,13 @@ export async function getProductsBySeller(req,res){
         seller:user.id
     })
 
-    const totalPages = Math.ceil(totalProduct/5);
+    const limit = Math.min(Math.max(parseInt(req.query.limit) || 5,1),50);
+    const totalPages = Math.ceil(totalProduct/limit);
     const page = clampPage(req.query.page,totalPages);
-    const skip = (page-1)*5;
+    const skip = (page-1)*limit;
     const products  = await productModel.find({
         seller:user.id
-    }).skip(skip).limit(5);
+    }).sort({createdAt:-1}).skip(skip).limit(limit);
     
     return res.status(200).json({
         message:"product feteched successfully",

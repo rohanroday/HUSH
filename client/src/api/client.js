@@ -45,7 +45,7 @@ export const api = {
 
   getProducts: (page = 1) => request(`/products?page=${page}`),
   getProduct: (id) => request(`/products/${id}`),
-  getSellerProducts: (page = 1) => request(`/products/seller?page=${page}`),
+  getSellerProducts: (page = 1, limit = 50) => request(`/products/seller?page=${page}&limit=${limit}`),
   createProduct: (formData) => request("/products/create", { method: "POST", body: formData, isFormData: true }),
   updateProduct: (id, formData) => request(`/products/update/${id}`, { method: "PATCH", body: formData, isFormData: true }),
   togglePublish: (id) => request(`/products/publish/${id}`, { method: "PATCH" }),
@@ -60,6 +60,9 @@ export const api = {
   createOrder: (address) => request("/orders", { method: "POST", body: { address } }),
   getOrders: () => request("/orders"),
   cancelOrder: (orderId) => request(`/orders/cancel/${orderId}`, { method: "PATCH" }),
+  getSellerOrders: () => request("/orders/seller"),
+  updateOrderStatus: (orderId, status) =>
+    request(`/orders/status/${orderId}`, { method: "PATCH", body: { status } }),
 };
 
 export function setToken(token) {

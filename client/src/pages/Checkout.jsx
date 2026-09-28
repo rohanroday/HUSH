@@ -3,8 +3,9 @@ import { Link, useNavigate } from "react-router-dom";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../api/client";
+import { formatPrice } from "../components/ProductCard";
 
-const STEPS = ["Cart", "Address", "Payment", "Order"];
+const SHIPPING = 99;
 
 export default function Checkout() {
   const { user } = useAuth();
@@ -34,95 +35,137 @@ export default function Checkout() {
 
   if (!user) {
     return (
-      <div className="mx-auto max-w-xl px-4 py-24 text-center">
-        <h1 className="font-display text-2xl font-bold text-ink">Sign in to check out</h1>
-        <p className="mt-2 text-sm text-stone">Orders are tied to your HUSH account.</p>
-        <Link
-          to="/login"
-          state={{ from: "/checkout" }}
-          className="mt-6 inline-block bg-ink px-6 py-3 text-sm font-semibold text-cream hover:opacity-90"
-        >
-          Sign in
-        </Link>
-      </div>
-    );
-  }
-
-  if (items.length === 0 && !placed) {
-    return (
-      <div className="mx-auto max-w-xl px-4 py-24 text-center">
-        <h1 className="font-display text-2xl font-bold text-ink">Your cart is empty</h1>
-        <p className="mt-2 text-sm text-stone">Add something to your cart before checking out.</p>
-      </div>
+      <Message
+        title="Checkout"
+        body="Orders are tied to your HUSH account so you can track them afterwards."
+        action={
+          <Link to="/login" state={{ from: "/checkout" }} className="btn btn-primary">
+            Sign in to continue
+          </Link>
+        }
+      />
     );
   }
 
   if (placed) {
     return (
-      <div className="mx-auto max-w-xl px-4 py-24 text-center">
-        <h1 className="font-display text-2xl font-bold text-ink">Order placed</h1>
-        <p className="mt-2 text-sm text-stone">
-          Order #{placed._id?.slice(-6).toUpperCase()} — total ₹{placed.totalPrice?.amount?.toLocaleString("en-IN")}
+      <Message
+        title="Order placed"
+        body={`Order #${placed._id?.slice(-6).toUpperCase()} is in. We'll pack it next; you can follow its progress from your account.`}
+        action={
+          <div className="flex flex-wrap gap-3">
+            <button type="button" onClick={() => navigate("/profile?tab=orders")} className="btn btn-primary">
+              Track this order
+            </button>
+            <Link to="/shop" className="btn btn-outline">
+              Keep shopping
+            </Link>
+          </div>
+        }
+      >
+        <p className="tabular mt-8 text-sm text-ink">
+          Order total: <span className="font-semibold">{formatPrice(placed.totalPrice)}</span> + ₹{SHIPPING} shipping
         </p>
-        <button
-          type="button"
-          onClick={() => navigate("/profile?tab=orders")}
-          className="mt-6 bg-ink px-6 py-3 text-sm font-semibold text-cream hover:opacity-90"
-        >
-          View my orders
-        </button>
-      </div>
+      </Message>
     );
   }
 
+  if (items.length === 0) {
+    return (
+      <Message
+        title="Nothing to check out"
+        body="Your bag is empty. Add a piece or two first."
+        action={
+          <Link to="/shop" className="btn btn-primary">
+            Browse the collection
+          </Link>
+        }
+      />
+    );
+  }
+
+  const total = totalPrice + SHIPPING;
+
   return (
-    <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6 lg:px-8">
-      <h1 className="font-display mb-8 text-3xl font-extrabold text-ink">Checkout</h1>
+    <div className="mx-auto max-w-360 px-4 pb-8 pt-10 sm:px-6 lg:px-10 lg:pt-14">
+      <header className="mb-10 border-b border-ink pb-6">
+        <h1 className="font-display text-6xl font-black uppercase leading-[0.85] text-ink sm:text-7xl">Checkout</h1>
+      </header>
 
-      <ol className="mb-10 flex items-center justify-center gap-6">
-        {STEPS.map((s, i) => (
-          <li key={s} className="flex items-center gap-2 text-xs text-stone">
-            <span
-              className={`flex h-6 w-6 items-center justify-center rounded-full text-[11px] ${
-                i <= 1 ? "bg-ink text-cream" : "border border-line text-stone"
-              }`}
-            >
-              {i + 1}
-            </span>
-            {s}
-          </li>
-        ))}
-      </ol>
+      <div className="grid gap-12 lg:grid-cols-12">
+        <form onSubmit={submit} className="lg:col-span-7">
+          <h2 className="text-sm font-semibold text-ink">Where should we send it?</h2>
+          <div className="mt-6 grid gap-5 sm:grid-cols-2">
+            <Field label="House / flat no." autoComplete="address-line1" value={address.house} onChange={update("house")} required />
+            <Field label="Street" autoComplete="address-line2" value={address.street} onChange={update("street")} required />
+            <Field label="City" autoComplete="address-level2" value={address.city} onChange={update("city")} required />
+            <Field label="State" autoComplete="address-level1" value={address.state} onChange={update("state")} required />
+            <Field label="PIN code" autoComplete="postal-code" inputMode="numeric" value={address.zip} onChange={update("zip")} required />
+          </div>
 
-      <form onSubmit={submit} className="space-y-5 border border-line p-6">
-        <h2 className="text-sm font-semibold text-ink">Shipping address</h2>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="House / flat no." value={address.house} onChange={update("house")} required />
-          <Field label="Street" value={address.street} onChange={update("street")} required />
-          <Field label="City" value={address.city} onChange={update("city")} required />
-          <Field label="State" value={address.state} onChange={update("state")} required />
-          <Field label="ZIP / postal code" value={address.zip} onChange={update("zip")} required />
-        </div>
+          {error && (
+            <p role="alert" className="mt-6 border border-red-200 bg-red-50 p-4 text-sm text-red-900">
+              We couldn't place the order: {error}
+            </p>
+          )}
 
-        {error && (
-          <p className="rounded-md border border-line bg-cream-dark p-3 text-sm text-stone">
-            Couldn't place the order: {error}
-          </p>
-        )}
-
-        <div className="flex items-center justify-between border-t border-line pt-5">
-          <p className="text-sm text-stone">
-            Order total: <span className="font-semibold text-ink">₹{(totalPrice + 99).toLocaleString("en-IN")}</span>
-          </p>
-          <button
-            type="submit"
-            disabled={submitting}
-            className="bg-ink px-6 py-3 text-sm font-semibold text-cream hover:opacity-90 disabled:opacity-50"
-          >
-            {submitting ? "Placing order…" : "Place order"}
+          <button type="submit" disabled={submitting} className="btn btn-primary mt-8 w-full py-4! sm:w-auto sm:px-10!">
+            {submitting ? "Placing your order…" : `Place order · ₹${total.toLocaleString("en-IN")}`}
           </button>
-        </div>
-      </form>
+        </form>
+
+        <aside className="lg:col-span-5">
+          <div className="bg-paper p-6 lg:sticky lg:top-24 lg:p-8">
+            <h2 className="text-sm font-semibold text-ink">In your bag</h2>
+            <ul className="mt-5 space-y-4">
+              {items.map((item) => {
+                const p = item.productId;
+                return (
+                  <li key={`${p?._id}-${item.size}`} className="flex items-center gap-4">
+                    <div className="h-20 w-16 shrink-0 overflow-hidden bg-cream-dark">
+                      {p?.images?.[0]?.url && <img src={p.images[0].url} alt="" className="h-full w-full object-cover" />}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-ink">{p?.title.replace(/^Men /, "")}</p>
+                      <p className="mt-0.5 text-xs text-stone">
+                        Size {item.size} · Qty {item.quantity}
+                      </p>
+                    </div>
+                    <p className="tabular text-sm text-ink">
+                      {formatPrice(p && { ...p.price, amount: p.price.amount * item.quantity })}
+                    </p>
+                  </li>
+                );
+              })}
+            </ul>
+            <dl className="tabular mt-6 space-y-3 border-t border-line pt-5 text-sm">
+              <div className="flex justify-between">
+                <dt className="text-stone">Subtotal</dt>
+                <dd className="text-ink">₹{totalPrice.toLocaleString("en-IN")}</dd>
+              </div>
+              <div className="flex justify-between">
+                <dt className="text-stone">Standard shipping</dt>
+                <dd className="text-ink">₹{SHIPPING}</dd>
+              </div>
+              <div className="flex justify-between border-t border-line pt-4 text-base font-semibold text-ink">
+                <dt>Total</dt>
+                <dd>₹{total.toLocaleString("en-IN")}</dd>
+              </div>
+            </dl>
+          </div>
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+function Message({ title, body, action, children }) {
+  return (
+    <div className="mx-auto max-w-360 px-4 py-24 sm:px-6 lg:px-10 lg:py-32">
+      <h1 className="font-display text-6xl font-black uppercase leading-[0.85] text-ink sm:text-7xl">{title}</h1>
+      <p className="mt-5 max-w-md text-sm leading-relaxed text-stone">{body}</p>
+      {children}
+      <div className="mt-8">{action}</div>
     </div>
   );
 }
@@ -130,11 +173,8 @@ export default function Checkout() {
 function Field({ label, ...props }) {
   return (
     <label className="block text-sm">
-      <span className="mb-1.5 block text-xs font-medium text-stone">{label}</span>
-      <input
-        {...props}
-        className="w-full border border-line bg-cream px-3 py-2.5 text-sm text-ink focus:border-ink focus:outline-none"
-      />
+      <span className="mb-2 block text-xs font-medium text-ink">{label}</span>
+      <input {...props} className="field" />
     </label>
   );
 }

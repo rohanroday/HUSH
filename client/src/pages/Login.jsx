@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { LOOKS, pexels, srcSet } from "../data/lookbook";
 
 export default function Login() {
   const { login } = useAuth();
@@ -15,8 +16,8 @@ export default function Login() {
     setSubmitting(true);
     setError("");
     try {
-      await login(form.email, form.password);
-      navigate(location.state?.from || "/profile");
+      const user = await login(form.email, form.password);
+      navigate(location.state?.from || (user.role === "seller" ? "/seller" : "/profile"));
     } catch (err) {
       setError(err.message);
     } finally {
@@ -25,48 +26,91 @@ export default function Login() {
   };
 
   return (
-    <div className="mx-auto flex min-h-[70vh] max-w-md flex-col justify-center px-4 py-16 sm:px-6">
-      <p className="font-display text-2xl font-extrabold text-ink">HUSH</p>
-      <h1 className="mt-6 text-xl font-semibold text-ink">Sign in</h1>
-      <p className="mt-1 text-sm text-stone">Welcome back — sign in to your account.</p>
+    <AuthLayout
+      look={LOOKS.studioSide}
+      title="Welcome back"
+      subtitle="Sign in to see your bag, your orders and where they are."
+      footer={
+        <>
+          New to HUSH?{" "}
+          <Link to="/register" state={location.state} className="font-medium text-ink underline underline-offset-4">
+            Create an account
+          </Link>
+        </>
+      }
+    >
+      <form onSubmit={submit} className="space-y-5" noValidate={false}>
+        <Field
+          label="Email address"
+          type="email"
+          autoComplete="email"
+          value={form.email}
+          onChange={(v) => setForm((f) => ({ ...f, email: v }))}
+          required
+        />
+        <Field
+          label="Password"
+          type="password"
+          autoComplete="current-password"
+          value={form.password}
+          onChange={(v) => setForm((f) => ({ ...f, password: v }))}
+          required
+        />
 
-      <form onSubmit={submit} className="mt-8 space-y-4">
-        <Field label="Email address" type="email" value={form.email} onChange={(v) => setForm((f) => ({ ...f, email: v }))} required />
-        <Field label="Password" type="password" value={form.password} onChange={(v) => setForm((f) => ({ ...f, password: v }))} required />
+        {error && (
+          <p role="alert" className="border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-900">
+            {error}
+          </p>
+        )}
 
-        {error && <p className="text-sm text-red-700">{error}</p>}
-
-        <button
-          type="submit"
-          disabled={submitting}
-          className="w-full bg-ink py-3 text-sm font-semibold text-cream hover:opacity-90 disabled:opacity-50"
-        >
+        <button type="submit" disabled={submitting} className="btn btn-primary w-full py-4!">
           {submitting ? "Signing in…" : "Sign in"}
         </button>
       </form>
+    </AuthLayout>
+  );
+}
 
-      <p className="mt-6 text-center text-sm text-stone">
-        Don't have an account?{" "}
-        <Link to="/register" className="font-medium text-ink underline">
-          Create one
-        </Link>
-      </p>
+export function AuthLayout({ look, title, subtitle, children, footer }) {
+  return (
+    <div className="mx-auto grid max-w-360 lg:min-h-[calc(100dvh-6rem)] lg:grid-cols-2">
+      <div className="relative hidden overflow-hidden bg-ink lg:block">
+        <img
+          src={pexels(look.id, 1400)}
+          srcSet={srcSet(look.id)}
+          sizes="50vw"
+          alt={look.alt}
+          className="hero-mask absolute inset-0 h-full w-full object-cover"
+        />
+        <div className="absolute inset-0 bg-linear-to-t from-ink/60 to-transparent" />
+        <p className="font-display-wide absolute bottom-10 left-10 text-3xl font-extrabold text-paper">HUSH</p>
+      </div>
+
+      <div className="flex flex-col justify-center px-4 py-16 sm:px-10 lg:px-20">
+        <div className="mx-auto w-full max-w-sm">
+          <h1 className="font-display text-6xl font-black uppercase leading-[0.85] text-ink">{title}</h1>
+          <p className="mt-4 text-sm leading-relaxed text-stone">{subtitle}</p>
+          <div className="mt-10">{children}</div>
+          <p className="mt-8 text-sm text-stone">{footer}</p>
+        </div>
+      </div>
     </div>
   );
 }
 
-export function Field({ label, type = "text", value, onChange, required, hint }) {
+export function Field({ label, type = "text", value, onChange, required, hint, ...rest }) {
   return (
     <label className="block text-sm">
-      <span className="mb-1.5 block text-xs font-medium text-stone">{label}</span>
+      <span className="mb-2 block text-xs font-medium text-ink">{label}</span>
       <input
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         required={required}
-        className="w-full border border-line bg-cream px-3 py-2.5 text-sm text-ink focus:border-ink focus:outline-none"
+        className="field"
+        {...rest}
       />
-      {hint && <span className="mt-1 block text-[11px] text-stone">{hint}</span>}
+      {hint && <span className="mt-1.5 block text-xs text-stone">{hint}</span>}
     </label>
   );
 }
