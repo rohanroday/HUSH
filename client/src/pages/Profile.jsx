@@ -109,6 +109,7 @@ function OrdersPanel() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
+  const [notice, setNotice] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -168,6 +169,12 @@ function OrdersPanel() {
 
       {loading && <p className="text-sm text-stone">Loading orders…</p>}
 
+      {notice && (
+        <p role="status" className="mb-5 border border-line bg-paper p-4 text-sm text-ink">
+          {notice}
+        </p>
+      )}
+
       {error && (
         <p className="border border-red-200 bg-red-50 p-4 text-sm text-red-800">Couldn't load orders: {error}</p>
       )}
@@ -185,26 +192,88 @@ function OrdersPanel() {
 
       <ul className="space-y-4">
         {filtered.map((order) => (
-          <OrderCard key={order._id} order={order} onChanged={load} />
+          <OrderCard key={order._id} order={order} onChanged={load} onNotice={setNotice} />
         ))}
       </ul>
     </div>
   );
 }
 
-function OrderCard({ order, onChanged }) {
+const PAYMENT_LABELS = {
+  PAID: "Paid",
+  REFUND_PENDING: "Refund on its way",
+  REFUNDED: "Refunded",
+};
+
+function CancellationStatus({ request }) {
+  const meta = {
+    REQUESTED: {
+      tone: "border-amber-200 bg-amber-50 text-amber-950",
+      title: "Cancellation requested",
+      body: "The seller has been notified and will approve or decline it.",
+    },
+    APPROVED: {
+      tone: "border-emerald-200 bg-emerald-50 text-emerald-950",
+      title: "Cancellation approved",
+      body: "Your refund has been started and usually arrives in 5–7 working days.",
+    },
+    DECLINED: {
+      tone: "border-line bg-paper text-ink",
+      title: "Cancellation declined",
+      body: "The seller couldn't cancel this order.",
+    },
+  }[request.status];
+  if (!meta) return null;
+  return (
+    <div className={`mt-5 border p-4 text-sm ${meta.tone}`} role="status">
+      <p className="font-semibold">{meta.title}</p>
+      <p className="mt-1 text-xs leading-relaxed opacity-80">{meta.body}</p>
+      {request.reason && <p className="mt-2 text-xs">Your reason: “{request.reason}”</p>}
+      {request.sellerNote && <p className="mt-1 text-xs">Seller's note: “{request.sellerNote}”</p>}
+    </div>
+  );
+}
+
+function OrderCard({ order, onChanged, onNotice }) {
   const [open, setOpen] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [error, setError] = useState("");
   const canCancel = ["PLACED", "PENDING"].includes(order.status);
+  const request = order.cancellationRequest;
+  const canRequest = order.status === "SHIPPED" && !request?.status;
+  const [asking, setAsking] = useState(false);
+  const [reason, setReason] = useState("");
+  const [sending, setSending] = useState(false);
+
+  const sendRequest = async (e) => {
+    e.preventDefault();
+    setSending(true);
+    setError("");
+    try {
+      const res = await api.requestCancellation(order._id, reason);
+      onNotice?.(res.message);
+      setAsking(false);
+      await onChanged();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSending(false);
+    }
+  };
   const itemCount = order.products.reduce((n, p) => n + p.quantity, 0);
 
+  const paid = order.payment?.status === "PAID";
+
   const cancel = async () => {
-    if (!window.confirm("Cancel this order?")) return;
+    const question = paid
+      ? "Cancel this order? The full amount will be refunded to your original payment method."
+      : "Cancel this order?";
+    if (!window.confirm(question)) return;
     setCancelling(true);
     setError("");
     try {
-      await api.cancelOrder(order._id);
+      const res = await api.cancelOrder(order._id);
+      onNotice?.(res.message);
       await onChanged();
     } catch (err) {
       setError(err.message);
@@ -270,13 +339,63 @@ function OrderCard({ order, onChanged }) {
         </div>
       )}
 
+      {asking && (
+        <form onSubmit={sendRequest} className="mt-5 bg-paper p-4">
+          <label className="block">
+            <span className="text-sm font-medium text-ink">Why do you want to cancel?</span>
+            <span className="mt-0.5 block text-xs text-stone">
+              This parcel has already shipped, so the seller decides. If they approve, you're refunded in full.
+            </span>
+            <textarea
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              required
+              minLength={3}
+              maxLength={300}
+              rows={3}
+              placeholder="e.g. Ordered the wrong size"
+              className="field mt-3 resize-y"
+            />
+          </label>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button type="submit" disabled={sending || reason.trim().length < 3} className="btn btn-primary px-4! py-2!">
+              {sending ? "Sending…" : "Send request to seller"}
+            </button>
+            <button type="button" onClick={() => setAsking(false)} className="btn btn-outline px-4! py-2!">
+              Never mind
+            </button>
+          </div>
+        </form>
+      )}
+
+      {request?.status && <CancellationStatus request={request} />}
+
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4 text-sm">
         <span className="text-stone">
           {itemCount} {itemCount === 1 ? "item" : "items"} ·{" "}
-          <span className="font-semibold text-ink">{formatPrice(order.totalPrice)}</span>
+          <span className="tabular font-semibold text-ink">{formatPrice(order.totalPrice)}</span>
+          {PAYMENT_LABELS[order.payment?.status] && (
+            <span
+              className={`ml-2 text-xs font-medium ${
+                order.payment.status === "PAID" ? "text-emerald-800" : "text-clay"
+              }`}
+            >
+              · {PAYMENT_LABELS[order.payment.status]}
+              {order.payment.status === "PAID" && order.payment.method && ` via ${order.payment.method.toUpperCase()}`}
+            </span>
+          )}
         </span>
         <div className="flex items-center gap-2">
           {error && <span className="text-xs text-red-700">{error}</span>}
+          {canRequest && !asking && (
+            <button
+              type="button"
+              onClick={() => setAsking(true)}
+              className="border border-line px-3 py-1.5 text-xs font-medium text-ink hover:border-ink"
+            >
+              Request cancellation
+            </button>
+          )}
           {canCancel && (
             <button
               type="button"

@@ -78,11 +78,39 @@ const orderSchema = new mongoose.Schema({
         required:true,
     }
   },
+  // flat shipping charged on top of the items; totalPrice includes it
+  shippingFee:{
+    type:Number,
+    default:0,
+  },
   status:{
     type:String,
     required:true,
-    enum:['PENDING','SHIPPED','DELIVERED','PLACED','CANCELLED'],
+    // PAYMENT_PENDING: stock is held while the buyer is paying; not a real order yet
+    enum:['PAYMENT_PENDING','PENDING','SHIPPED','DELIVERED','PLACED','CANCELLED'],
     default:'PLACED',
+  },
+  // A buyer can ask to cancel once the parcel has shipped; a seller decides.
+  cancellationRequest:{
+    status:{ type:String, enum:["REQUESTED","APPROVED","DECLINED"] },
+    reason:{ type:String, maxlength:300 },
+    requestedAt:Date,
+    respondedAt:Date,
+    sellerNote:{ type:String, maxlength:300 },
+  },
+  payment:{
+    provider:{ type:String, enum:['razorpay'] },
+    status:{
+      type:String,
+      enum:['CREATED','PAID','FAILED','REFUND_PENDING','REFUNDED'],
+    },
+    razorpayOrderId:{ type:String, index:true },
+    razorpayPaymentId:String,
+    razorpaySignature:String,
+    method:String,
+    paidAt:Date,
+    refundId:String,
+    refundedAt:Date,
   },
 },{timestamps:true});
 

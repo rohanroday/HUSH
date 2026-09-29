@@ -28,8 +28,16 @@ development.
 - **Product detail** — `GET /api/products/:id`, cached in `ProductsContext`.
 - **Cart** — `GET /api/cart`, add/remove via
   `POST /cart/add/product/:id` and `DELETE /cart/remove/product/:id`.
-- **Checkout/Orders** — `POST /api/orders`, `GET /api/orders` and
-  `PATCH /api/orders/cancel/:id`.
+- **Checkout (Razorpay)** — `POST /api/payments/checkout` holds the stock and
+  creates a Razorpay order; the Razorpay Checkout modal takes the payment; then
+  `POST /api/payments/verify` checks the signature and confirms the payment with
+  Razorpay before the order is placed. Closing the modal calls
+  `POST /api/payments/abandon/:id` to release the stock. Needs
+  `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET` in `server/.env`.
+- **Orders** — `GET /api/orders` and `PATCH /api/orders/cancel/:id` (paid
+  orders are refunded through Razorpay automatically).
+- **Seller studio** — `/seller`: overview, orders (status steps, cancel &
+  refund), products, and notifications from `GET /api/notifications`.
 
 ## Design notes
 
