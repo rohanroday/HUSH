@@ -57,12 +57,24 @@ export const api = {
   removeFromCart: (productId, size, quantity = 1) =>
     request(`/cart/remove/product/${productId}`, { method: "DELETE", body: { size, quantity } }),
 
-  createOrder: (address) => request("/orders", { method: "POST", body: { address } }),
   getOrders: () => request("/orders"),
   cancelOrder: (orderId) => request(`/orders/cancel/${orderId}`, { method: "PATCH" }),
   getSellerOrders: () => request("/orders/seller"),
   updateOrderStatus: (orderId, status) =>
     request(`/orders/status/${orderId}`, { method: "PATCH", body: { status } }),
+  requestCancellation: (orderId, reason) =>
+    request(`/orders/cancel-request/${orderId}`, { method: "POST", body: { reason } }),
+  respondToCancellation: (orderId, decision, note) =>
+    request(`/orders/cancel-request/${orderId}`, { method: "PATCH", body: { decision, note } }),
+
+  // Razorpay checkout: hold stock + create the payment, then confirm or release it.
+  startCheckout: (address) => request("/payments/checkout", { method: "POST", body: { address } }),
+  verifyPayment: (payload) => request("/payments/verify", { method: "POST", body: payload }),
+  abandonCheckout: (orderId) => request(`/payments/abandon/${orderId}`, { method: "POST" }),
+
+  getNotifications: () => request("/notifications"),
+  markNotificationRead: (id) => request(`/notifications/${id}/read`, { method: "PATCH" }),
+  markAllNotificationsRead: () => request("/notifications/read-all", { method: "PATCH" }),
 };
 
 export function setToken(token) {

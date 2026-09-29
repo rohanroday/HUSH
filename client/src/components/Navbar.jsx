@@ -2,6 +2,7 @@ import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useCart } from "../context/CartContext";
+import { useNotifications } from "../context/NotificationsContext";
 
 const NAV_LINKS = [
   { to: "/shop", label: "Shop all" },
@@ -51,6 +52,7 @@ function IconButton({ children, onClick, to, label, badge }) {
 export default function Navbar() {
   const { user, logout } = useAuth();
   const { count } = useCart();
+  const { unread } = useNotifications();
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -166,6 +168,12 @@ export default function Navbar() {
               </IconButton>
             </div>
 
+            {user?.role === "seller" && (
+              <IconButton to="/seller?tab=alerts" label="Notifications" badge={unread}>
+                <BellIcon />
+              </IconButton>
+            )}
+
             <IconButton to={user ? "/profile" : "/login"} label={user ? "Your account" : "Sign in"}>
               <UserIcon />
             </IconButton>
@@ -238,6 +246,14 @@ function SearchIcon() {
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
       <circle cx="11" cy="11" r="6.5" />
       <path d="m20 20-4.2-4.2" />
+    </svg>
+  );
+}
+function BellIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+      <path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15l1.5-2Z" />
+      <path d="M10 20.5a2 2 0 0 0 4 0" />
     </svg>
   );
 }

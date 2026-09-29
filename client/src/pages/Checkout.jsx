@@ -4,6 +4,7 @@ import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../api/client";
 import { formatPrice } from "../components/ProductCard";
+import { openCheckout } from "../lib/razorpay";
 
 const SHIPPING = 99;
 
@@ -12,25 +13,65 @@ export default function Checkout() {
   const { items, totalPrice, refresh } = useCart();
   const navigate = useNavigate();
   const [address, setAddress] = useState({ house: "", street: "", city: "", state: "", zip: "" });
-  const [submitting, setSubmitting] = useState(false);
+  // idle → starting (holding stock) → paying (Razorpay modal) → confirming → done
+  const [phase, setPhase] = useState("idle");
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [placed, setPlaced] = useState(null);
 
   const update = (field) => (e) => setAddress((a) => ({ ...a, [field]: e.target.value }));
+  const busy = phase !== "idle";
 
   const submit = async (e) => {
     e.preventDefault();
-    setSubmitting(true);
     setError("");
+    setNotice("");
+    setPhase("starting");
+
+    let checkout;
     try {
-      const res = await api.createOrder(address);
-      setPlaced(res.data.order);
-      await refresh();
+      checkout = (await api.startCheckout(address)).data;
     } catch (err) {
       setError(err.message);
-    } finally {
-      setSubmitting(false);
+      setPhase("idle");
+      return;
     }
+
+    try {
+      setPhase("paying");
+      const count = items.reduce((n, i) => n + i.quantity, 0);
+      const result = await openCheckout({
+        ...checkout,
+        description: `${count} ${count === 1 ? "item" : "items"} from HUSH`,
+      });
+
+      if (result.status === "paid") {
+        setPhase("confirming");
+        const res = await api.verifyPayment({ orderId: checkout.orderId, ...result.response });
+        setPlaced(res.data.order);
+        setPhase("done");
+        refresh();
+        return;
+      }
+
+      // Modal closed: let the server double-check with Razorpay, then release the hold.
+      setPhase("confirming");
+      const res = await api.abandonCheckout(checkout.orderId);
+      if (res.data.outcome === "paid") {
+        setPlaced(res.data.order);
+        setPhase("done");
+        refresh();
+        return;
+      }
+      setNotice(
+        result.lastError
+          ? `Payment didn't go through: ${result.lastError} Your bag is saved, so you can try again.`
+          : "Payment cancelled. Nothing was charged and your bag is saved."
+      );
+    } catch (err) {
+      setError(err.message);
+    }
+    setPhase("idle");
   };
 
   if (!user) {
@@ -50,8 +91,8 @@ export default function Checkout() {
   if (placed) {
     return (
       <Message
-        title="Order placed"
-        body={`Order #${placed._id?.slice(-6).toUpperCase()} is in. We'll pack it next; you can follow its progress from your account.`}
+        title="Paid. Thank you."
+        body={`Order #${placed._id?.slice(-6).toUpperCase()} is confirmed and the studio has been notified. You can follow it from your account as it's packed and shipped.`}
         action={
           <div className="flex flex-wrap gap-3">
             <button type="button" onClick={() => navigate("/profile?tab=orders")} className="btn btn-primary">
@@ -64,7 +105,11 @@ export default function Checkout() {
         }
       >
         <p className="tabular mt-8 text-sm text-ink">
-          Order total: <span className="font-semibold">{formatPrice(placed.totalPrice)}</span> + ₹{SHIPPING} shipping
+          Paid <span className="font-semibold">{formatPrice(placed.totalPrice)}</span>
+          {placed.payment?.method && <> by {placed.payment.method.toUpperCase()}</>}
+          {placed.payment?.razorpayPaymentId && (
+            <span className="mt-1 block text-xs text-stone">Payment ID {placed.payment.razorpayPaymentId}</span>
+          )}
         </p>
       </Message>
     );
@@ -95,23 +140,45 @@ export default function Checkout() {
       <div className="grid gap-12 lg:grid-cols-12">
         <form onSubmit={submit} className="lg:col-span-7">
           <h2 className="text-sm font-semibold text-ink">Where should we send it?</h2>
-          <div className="mt-6 grid gap-5 sm:grid-cols-2">
+          <fieldset disabled={busy} className="mt-6 grid gap-5 disabled:opacity-60 sm:grid-cols-2">
             <Field label="House / flat no." autoComplete="address-line1" value={address.house} onChange={update("house")} required />
             <Field label="Street" autoComplete="address-line2" value={address.street} onChange={update("street")} required />
             <Field label="City" autoComplete="address-level2" value={address.city} onChange={update("city")} required />
             <Field label="State" autoComplete="address-level1" value={address.state} onChange={update("state")} required />
             <Field label="PIN code" autoComplete="postal-code" inputMode="numeric" value={address.zip} onChange={update("zip")} required />
-          </div>
+          </fieldset>
 
           {error && (
             <p role="alert" className="mt-6 border border-red-200 bg-red-50 p-4 text-sm text-red-900">
-              We couldn't place the order: {error}
+              {error}
+            </p>
+          )}
+          {notice && (
+            <p role="status" className="mt-6 border border-line bg-paper p-4 text-sm text-ink">
+              {notice}
             </p>
           )}
 
-          <button type="submit" disabled={submitting} className="btn btn-primary mt-8 w-full py-4! sm:w-auto sm:px-10!">
-            {submitting ? "Placing your order…" : `Place order · ₹${total.toLocaleString("en-IN")}`}
+          <button type="submit" disabled={busy} className="btn btn-primary mt-8 w-full py-4! sm:w-auto sm:px-10!">
+            {phase === "starting"
+              ? "Reserving your pieces…"
+              : phase === "paying"
+                ? "Complete payment in the Razorpay window"
+                : phase === "confirming"
+                  ? "Confirming your payment…"
+                  : `Pay ₹${total.toLocaleString("en-IN")} securely`}
           </button>
+
+          <div className="mt-6 flex items-start gap-3 text-xs leading-relaxed text-stone">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="mt-0.5 shrink-0" aria-hidden="true">
+              <rect x="4.5" y="10.5" width="15" height="10" rx="1.5" />
+              <path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" />
+            </svg>
+            <p>
+              Payments are processed securely by Razorpay. Your pieces are held for{" "}
+              20 minutes while you pay, and your card details never touch our servers.
+            </p>
+          </div>
         </form>
 
         <aside className="lg:col-span-5">
