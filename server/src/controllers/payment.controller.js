@@ -8,13 +8,15 @@ import {
   ensureCaptured,
   fetchPayment,
   isValidPaymentSignature,
-  refundPayment,
   toSubunits,
 } from "../services/payment.service.js";
 import {
   finalizePaidOrder,
+  isReleased,
   prepareCart,
   reconcileHeldOrder,
+  recoverReleasedOrder,
+  settleReleasedOrder,
 } from "../services/checkout.service.js";
 
 // Step 1: hold the stock, create a HUSH order awaiting payment and the
@@ -113,6 +115,9 @@ export async function verifyPayment(req, res) {
   if (order.payment.status === "PAID") {
     return res.status(200).json({ message: "Payment already confirmed", data: { order } });
   }
+  if (order.payment.status === "REFUND_PENDING" || order.payment.status === "REFUNDED") {
+    return res.status(409).json({ message: "This payment has already been refunded in full." });
+  }
 
   let payment;
   try {
@@ -140,38 +145,38 @@ export async function verifyPayment(req, res) {
     return res.status(200).json({ message: "Payment confirmed", data: { order: paid } });
   }
 
-  const current = await orderModel.findById(order._id);
+  let current = await orderModel.findById(order._id);
   if (current.payment.status === "PAID") {
     return res.status(200).json({ message: "Payment confirmed", data: { order: current } });
   }
 
-  // The hold expired and the stock went back on sale before the money
-  // arrived. Give it back rather than keep money for an order we can't fill.
-  try {
-    const refund = await refundPayment(payment.id, order.totalPrice.amount, {
-      hushOrderId: order._id.toString(),
-      reason: "checkout expired before payment",
-    });
-    await orderModel.updateOne(
-      { _id: order._id },
-      {
-        $set: {
-          "payment.razorpayPaymentId": payment.id,
-          "payment.status": refund.status === "processed" ? "REFUNDED" : "REFUND_PENDING",
-          "payment.refundId": refund.id,
-          "payment.refundedAt": new Date(),
-        },
-      }
-    );
-  } catch (err) {
-    console.error(`refund for expired order ${order._id} failed:`, describeRazorpayError(err));
-    return res.status(409).json({
-      message: "Your checkout expired before the payment arrived. Contact us with your payment ID and we'll refund it.",
-      data: { paymentId: payment.id },
-    });
+  // The stock had already gone back on sale (an earlier attempt failed, or
+  // the hold expired) before this payment arrived. Take it again if it is
+  // still there; otherwise give the money back rather than keep it for an
+  // order we can't fill.
+  if (isReleased(current)) {
+    const result = await recoverReleasedOrder(current, payment, signature);
+    if (result.outcome === "paid") {
+      return res.status(200).json({ message: "Payment confirmed", data: { order: result.order } });
+    }
+    if (result.outcome === "refunded") {
+      return res.status(409).json({
+        message: "Sorry, this sold out before your payment arrived, so we've refunded it in full. Please review your bag.",
+      });
+    }
+    if (result.outcome === "refund_failed") {
+      return res.status(409).json({
+        message: "This sold out before your payment arrived. Your refund is on its way; if it doesn't arrive in a few days, contact us with your payment ID.",
+        data: { paymentId: payment.id },
+      });
+    }
+    current = await orderModel.findById(order._id);
+    if (current.payment.status === "PAID") {
+      return res.status(200).json({ message: "Payment confirmed", data: { order: current } });
+    }
   }
   return res.status(409).json({
-    message: "Your checkout expired before the payment arrived, so we've refunded it in full. Please place the order again.",
+    message: "We couldn't place this order. If you were charged it is being refunded; check your orders in a few minutes.",
   });
 }
 
@@ -182,10 +187,15 @@ export async function abandonCheckout(req, res) {
   if (!order) {
     return res.status(404).json({ message: "Order not found" });
   }
-  if (order.status !== "PAYMENT_PENDING") {
+  if (order.payment?.status === "PAID") {
+    return res.status(200).json({ message: "Payment received", data: { outcome: "paid", order } });
+  }
+  if (order.status !== "PAYMENT_PENDING" && !isReleased(order)) {
     return res.status(200).json({ message: "Nothing to release", data: { outcome: order.status, order } });
   }
-  const outcome = await reconcileHeldOrder(order);
+  // already released (the payment failed earlier): make sure no money has
+  // arrived since, otherwise check with Razorpay and release the hold
+  const outcome = isReleased(order) ? await settleReleasedOrder(order) : await reconcileHeldOrder(order);
   const fresh = await orderModel.findById(order._id);
   return res.status(200).json({
     message: outcome === "paid" ? "Payment received" : "Checkout released",

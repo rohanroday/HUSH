@@ -1,7 +1,7 @@
 import config from "../config/config.js";
 import orderModel from "../models/order.model.js";
 import cartModel from "../models/cart.model.js";
-import { releaseOrderStock } from "./stock.service.js";
+import { releaseOrderStock, reserveAll } from "./stock.service.js";
 import {
   ensureCaptured,
   fetchOrderPayments,
@@ -67,30 +67,128 @@ export async function prepareCart(userId) {
   return { currency, lines, stockItems, itemsTotal };
 }
 
+function paidFields(payment, signature) {
+  return {
+    status: "PLACED",
+    "payment.status": "PAID",
+    "payment.razorpayPaymentId": payment.id,
+    "payment.method": payment.method,
+    "payment.paidAt": new Date(),
+    ...(signature ? { "payment.razorpaySignature": signature } : {}),
+  };
+}
+
+async function afterPaid(order) {
+  await cartModel.updateOne({ userId: order.userId }, { $set: { products: [] } });
+  safely(notifySellersOfNewOrder(order), "new order");
+  safely(notifyLowStock(order), "low stock");
+}
+
 // Turns a held checkout into a real, paid order. Only the first caller wins
 // (the buyer's verify request, the abandon check or the expiry sweep), so
 // sellers are notified and the cart cleared exactly once.
 export async function finalizePaidOrder(order, payment, signature) {
   const updated = await orderModel.findOneAndUpdate(
     { _id: order._id, status: "PAYMENT_PENDING", "payment.status": "CREATED" },
-    {
-      $set: {
-        status: "PLACED",
-        "payment.status": "PAID",
-        "payment.razorpayPaymentId": payment.id,
-        "payment.method": payment.method,
-        "payment.paidAt": new Date(),
-        ...(signature ? { "payment.razorpaySignature": signature } : {}),
-      },
-    },
+    { $set: paidFields(payment, signature) },
     { new: true }
   );
   if (!updated) return null;
-
-  await cartModel.updateOne({ userId: order.userId }, { $set: { products: [] } });
-  safely(notifySellersOfNewOrder(updated), "new order");
-  safely(notifyLowStock(updated), "low stock");
+  await afterPaid(updated);
   return updated;
+}
+
+// A checkout whose stock has already gone back on sale (failed payment,
+// closed window or expired hold).
+export function isReleased(order) {
+  return order.status === "CANCELLED" && order.payment?.status === "FAILED";
+}
+
+const RELEASED = { status: "CANCELLED", "payment.status": "FAILED" };
+
+// Money arrived for a checkout that was already released (the buyer retried
+// after a failed attempt, or the bank confirmed late). Take the stock again
+// if it is still there and place the order; otherwise refund in full.
+// Returns { outcome: "paid", order } or an outcome of "refunded",
+// "refund_failed" or "raced" (someone else settled it first).
+export async function recoverReleasedOrder(order, payment, signature) {
+  const items = order.products.map((p) => ({
+    productId: p.product.productId,
+    size: p.size,
+    quantity: p.quantity,
+  }));
+  const soldOut = await reserveAll(items);
+
+  if (!soldOut) {
+    const updated = await orderModel.findOneAndUpdate(
+      { _id: order._id, ...RELEASED },
+      { $set: paidFields(payment, signature) },
+      { new: true }
+    );
+    if (updated) {
+      await afterPaid(updated);
+      return { outcome: "paid", order: updated };
+    }
+    // someone else settled this order in the meantime; give the stock back
+    await releaseOrderStock(order);
+    return { outcome: "raced" };
+  }
+
+  // Claim the refund first so two callers can never refund the same payment.
+  const claimed = await orderModel.updateOne(
+    { _id: order._id, ...RELEASED },
+    {
+      $set: {
+        "payment.status": "REFUND_PENDING",
+        "payment.razorpayPaymentId": payment.id,
+        "payment.method": payment.method,
+      },
+    }
+  );
+  if (claimed.modifiedCount === 0) return { outcome: "raced" };
+  try {
+    const refund = await refundPayment(payment.id, order.totalPrice.amount, {
+      hushOrderId: order._id.toString(),
+      reason: "sold out before payment arrived",
+    });
+    await orderModel.updateOne(
+      { _id: order._id },
+      {
+        $set: {
+          "payment.status": refund.status === "processed" ? "REFUNDED" : "REFUND_PENDING",
+          "payment.refundId": refund.id,
+          "payment.refundedAt": new Date(),
+        },
+      }
+    );
+    return { outcome: "refunded" };
+  } catch (err) {
+    // put it back so the sweep tries the refund again
+    await orderModel.updateOne(
+      { _id: order._id, "payment.status": "REFUND_PENDING", "payment.refundId": { $exists: false } },
+      { $set: { "payment.status": "FAILED" } }
+    );
+    console.error(`refund for released order ${order._id} failed:`, err?.error?.description || err.message);
+    return { outcome: "refund_failed", paymentId: payment.id };
+  }
+}
+
+// Asks Razorpay whether a released checkout was paid after all, and if so
+// places or refunds it. Returns "released" (no money arrived), "paid",
+// "refunded", "refund_failed", "raced", or "unknown" if Razorpay can't be reached.
+export async function settleReleasedOrder(order) {
+  if (!order.payment?.razorpayOrderId) return "released";
+  let payment;
+  try {
+    const payments = await fetchOrderPayments(order.payment.razorpayOrderId);
+    payment = payments.find((p) => p.status === "captured" || p.status === "authorized");
+    if (!payment) return "released";
+    payment = await ensureCaptured(payment);
+  } catch (err) {
+    console.error(`could not check released order ${order._id}:`, err?.error?.description || err.message);
+    return "unknown";
+  }
+  return (await recoverReleasedOrder(order, payment)).outcome;
 }
 
 // Releases a held checkout's stock and marks it abandoned. Returns true only
@@ -160,8 +258,11 @@ export async function refundIfPaid(order, reason) {
 }
 
 // Checkouts left open (closed tab, lost connection) hold stock; sweep them.
+// Also double-checks released checkouts once the payment window can no longer
+// be open, in case money arrived after the stock went back on sale.
 export function startPaymentSweeper() {
   const holdMs = config.PAYMENT_HOLD_MINUTES * 60 * 1000;
+  const lateCheckMs = holdMs + 10 * 60 * 1000;
   const sweep = async () => {
     try {
       const stale = await orderModel.find({
@@ -172,11 +273,26 @@ export function startPaymentSweeper() {
         const outcome = await reconcileHeldOrder(order);
         console.log(`payment sweep: order ${order._id} -> ${outcome}`);
       }
+
+      const released = await orderModel.find({
+        ...RELEASED,
+        "payment.razorpayOrderId": { $exists: true },
+        "payment.lateChecked": { $ne: true },
+        createdAt: { $lt: new Date(Date.now() - lateCheckMs), $gt: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+      });
+      for (const order of released) {
+        const outcome = await settleReleasedOrder(order);
+        if (outcome === "released") {
+          await orderModel.updateOne({ _id: order._id, ...RELEASED }, { $set: { "payment.lateChecked": true } });
+        } else {
+          console.log(`payment sweep: released order ${order._id} -> ${outcome}`);
+        }
+      }
     } catch (err) {
       console.error("payment sweep failed:", err.message);
     }
   };
-  const timer = setInterval(sweep, 5 * 60 * 1000);
+  const timer = setInterval(sweep, 60 * 1000);
   timer.unref();
   sweep();
 }

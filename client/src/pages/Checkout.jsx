@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
@@ -19,6 +19,26 @@ export default function Checkout() {
   const [notice, setNotice] = useState("");
   const [placed, setPlaced] = useState(null);
 
+  // the checkout whose stock is currently held for this buyer, if any
+  const held = useRef(null);
+
+  // Give the stock back straight away instead of waiting for the hold to run
+  // out. The server checks with Razorpay first, so a payment that did go
+  // through is never lost.
+  const releaseHold = (options) => {
+    if (held.current) api.abandonCheckout(held.current, options).catch(() => {});
+  };
+
+  // Closing the tab, reloading or navigating away mid-payment also releases it.
+  useEffect(() => {
+    const onLeave = () => releaseHold({ keepalive: true });
+    window.addEventListener("pagehide", onLeave);
+    return () => {
+      window.removeEventListener("pagehide", onLeave);
+      onLeave();
+    };
+  }, []);
+
   const update = (field) => (e) => setAddress((a) => ({ ...a, [field]: e.target.value }));
   const busy = phase !== "idle";
 
@@ -37,13 +57,18 @@ export default function Checkout() {
       return;
     }
 
+    held.current = checkout.orderId;
     try {
       setPhase("paying");
       const count = items.reduce((n, i) => n + i.quantity, 0);
       const result = await openCheckout({
         ...checkout,
         description: `${count} ${count === 1 ? "item" : "items"} from HUSH`,
+        // a failed attempt puts the stock back on sale; if the buyer retries
+        // in the same window the server takes it again when the money arrives
+        onFailed: () => releaseHold(),
       });
+      held.current = null;
 
       if (result.status === "paid") {
         setPhase("confirming");
@@ -64,7 +89,9 @@ export default function Checkout() {
         return;
       }
       setNotice(
-        result.lastError
+        res.data.outcome === "refunded"
+          ? "Your payment arrived after this sold out, so we've refunded it in full. Please review your bag."
+          : result.lastError
           ? `Payment didn't go through: ${result.lastError} Your bag is saved, so you can try again.`
           : "Payment cancelled. Nothing was charged and your bag is saved."
       );
@@ -196,8 +223,8 @@ export default function Checkout() {
               <path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" />
             </svg>
             <p>
-              Payments are processed securely by Razorpay. Your pieces are held for{" "}
-              20 minutes while you pay, and your card details never touch our servers.
+              Payments are processed securely by Razorpay. Your pieces are held for you while
+              you pay, and your card details never touch our servers.
             </p>
           </div>
         </form>
