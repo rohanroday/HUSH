@@ -39,21 +39,20 @@ development.
 - **Seller studio** — `/seller`: overview, orders (status steps, cancel &
   refund), products, and notifications from `GET /api/notifications`.
 
-## Design notes
+## Notes
 
-- Palette, type (Archivo for display / Inter for body) and layout follow the
-  provided HUSH mockups. Hero/category imagery is CSS-only (no stock photos
-  bundled), since the backend has no CMS/banner content — swap in real
-  photography via the `images` array pattern already used for products.
-- Wishlist, saved addresses and account settings are UI-only placeholders:
-  the backend doesn't have endpoints for them yet.
+- The wishlist is stored in the browser (`localStorage`), so shoppers can
+  save pieces without signing in.
+- The contact form posts to `POST /api/contact`; messages appear in the seller
+  studio's notifications with a reply-by-email link.
+- Account settings let anyone change their password (`PATCH /api/auth/password`).
 
 ## Structure
 
 ```
 src/
   api/client.js          fetch wrapper + typed API calls
-  context/                Auth, Cart, Products (React Context)
+  context/                Auth, Cart, Products, Notifications, Wishlist
   components/              Navbar, Footer, ProductCard
   pages/                   Home, Shop, ProductDetail, Cart, Checkout,
                            Login, Register, Profile, About, Contact

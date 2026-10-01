@@ -12,7 +12,7 @@ export default function Checkout() {
   const { user } = useAuth();
   const { items, totalPrice, refresh } = useCart();
   const navigate = useNavigate();
-  const [address, setAddress] = useState({ house: "", street: "", city: "", state: "", zip: "" });
+  const [address, setAddress] = useState({ house: "", street: "", city: "", state: "", zip: "", phone: "" });
   // idle → starting (holding stock) → paying (Razorpay modal) → confirming → done
   const [phase, setPhase] = useState("idle");
   const [error, setError] = useState("");
@@ -141,11 +141,32 @@ export default function Checkout() {
         <form onSubmit={submit} className="lg:col-span-7">
           <h2 className="text-sm font-semibold text-ink">Where should we send it?</h2>
           <fieldset disabled={busy} className="mt-6 grid gap-5 disabled:opacity-60 sm:grid-cols-2">
-            <Field label="House / flat no." autoComplete="address-line1" value={address.house} onChange={update("house")} required />
-            <Field label="Street" autoComplete="address-line2" value={address.street} onChange={update("street")} required />
-            <Field label="City" autoComplete="address-level2" value={address.city} onChange={update("city")} required />
-            <Field label="State" autoComplete="address-level1" value={address.state} onChange={update("state")} required />
-            <Field label="PIN code" autoComplete="postal-code" inputMode="numeric" value={address.zip} onChange={update("zip")} required />
+            <Field label="House / flat no." autoComplete="address-line1" maxLength={100} value={address.house} onChange={update("house")} required />
+            <Field label="Street" autoComplete="address-line2" maxLength={150} value={address.street} onChange={update("street")} required />
+            <Field label="City" autoComplete="address-level2" maxLength={60} value={address.city} onChange={update("city")} required />
+            <Field label="State" autoComplete="address-level1" maxLength={60} value={address.state} onChange={update("state")} required />
+            <Field
+              label="PIN code"
+              autoComplete="postal-code"
+              inputMode="numeric"
+              pattern="[1-9][0-9]{5}"
+              maxLength={6}
+              title="6-digit PIN code"
+              value={address.zip}
+              onChange={update("zip")}
+              required
+            />
+            <Field
+              label="Mobile number"
+              type="tel"
+              autoComplete="tel-national"
+              inputMode="tel"
+              maxLength={16}
+              placeholder="For the courier"
+              value={address.phone}
+              onChange={update("phone")}
+              required
+            />
           </fieldset>
 
           {error && (

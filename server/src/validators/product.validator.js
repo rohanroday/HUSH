@@ -1,113 +1,117 @@
 import { body } from "express-validator";
 import { validateRequest } from "../utils/validate.js";
 
+const SIZES = ["XS", "S", "M", "L", "XL", "XXL"];
+
+// Shipping and checkout are charged in rupees, so products are INR-only.
+const CURRENCIES = ["INR"];
+
+function uniqueSizes(sizes) {
+  const names = sizes.map((s) => s?.size);
+  if (new Set(names).size !== names.length) {
+    throw new Error("Each size can only be listed once");
+  }
+  return true;
+}
+
 export const createProductValidator = [
   body("title")
+    .isString()
     .trim()
     .notEmpty()
     .withMessage("Title is required")
     .isLength({ min: 3, max: 60 })
     .withMessage("Title must be between 3 and 60 characters"),
   body("description")
+    .isString()
+    .trim()
     .notEmpty()
     .withMessage("Description is required")
-    .trim()
     .isLength({ min: 10, max: 200 })
     .withMessage("Description must be between 10 and 200 characters"),
   body("price.amount")
-    .isFloat({ min: 0 })
-    .withMessage("Price must be a number")
     .notEmpty()
-    .withMessage("Price is required"),
+    .withMessage("Price is required")
+    .isFloat({ min: 1, max: 1000000 })
+    .withMessage("Price must be a number between 1 and 10,00,000")
+    .toFloat(),
   body("price.currency")
-    .isIn(["USD", "INR"])
-    .withMessage("Currency must be USD or INR")
-    .notEmpty()
-    .withMessage("Currency is required"),
-  body("category").isArray().withMessage("Category must be an array"),
+    .default("INR")
+    .isIn(CURRENCIES)
+    .withMessage("Currency must be INR"),
+  body("category")
+    .isArray({ min: 1, max: 10 })
+    .withMessage("Add between 1 and 10 categories"),
   body("category.*")
-    .trim()
     .isString()
     .withMessage("Category must be a string")
-    .notEmpty()
-    .withMessage("Category is required"),
-  body("sizes").isArray().withMessage("Size must be an array"),
-  body("sizes.*.size")
     .trim()
-    .isString()
-    .withMessage("Size must be a string")
-    .notEmpty()
-    .withMessage("Size is required")
-    .isIn(["XS", "S", "M", "L", "XL", "XXL"])
+    .isLength({ min: 2, max: 20 })
+    .withMessage("Each category must be between 2 and 20 characters"),
+  body("sizes")
+    .isArray({ min: 1, max: SIZES.length })
+    .withMessage("Add at least one size")
+    .custom(uniqueSizes),
+  body("sizes.*.size")
+    .isIn(SIZES)
     .withMessage("Size must be one of XS, S, M, L, XL, XXL"),
   body("sizes.*.stock")
-    .isInt({ min: 0 })
-    .withMessage("Stock must be an integer")
-    .notEmpty()
-    .withMessage("Stock is required"),
+    .isInt({ min: 0, max: 100000 })
+    .withMessage("Stock must be a whole number of 0 or more")
+    .toInt(),
   validateRequest,
 ];
 
 export const updateProductValidator = [
   body("title")
     .optional()
+    .isString()
     .trim()
-    .notEmpty()
-    .withMessage("Title is required")
     .isLength({ min: 3, max: 60 })
     .withMessage("Title must be between 3 and 60 characters"),
   body("description")
     .optional()
-    .trim()
-    .notEmpty()
-    .withMessage("Description is required")
+    .isString()
     .trim()
     .isLength({ min: 10, max: 200 })
     .withMessage("Description must be between 10 and 200 characters"),
-    body("price").optional(),
+  body("price")
+    .optional()
+    .isObject()
+    .withMessage("Invalid price"),
   body("price.amount")
-    .optional()
-    .trim()
-    .isFloat({ min: 0 })
-    .withMessage("Price must be a number")
+    .if(body("price").exists())
     .notEmpty()
-    .withMessage("Price is required"),
+    .withMessage("Price is required")
+    .isFloat({ min: 1, max: 1000000 })
+    .withMessage("Price must be a number between 1 and 10,00,000")
+    .toFloat(),
   body("price.currency")
-    .optional()
-    .trim()
-    .isIn(["USD", "INR"])
-    .withMessage("Currency must be USD or INR")
-    .notEmpty()
-    .withMessage("Currency is required"),
+    .if(body("price").exists())
+    .default("INR")
+    .isIn(CURRENCIES)
+    .withMessage("Currency must be INR"),
   body("category")
     .optional()
-    .isArray()
-    .withMessage("Category must be an array"),
+    .isArray({ min: 1, max: 10 })
+    .withMessage("Add between 1 and 10 categories"),
   body("category.*")
-    .optional()
-    .trim()
-    .trim()
     .isString()
     .withMessage("Category must be a string")
-    .notEmpty()
-    .withMessage("Category is required"),
-  body("sizes").optional().isArray().withMessage("Size must be an array"),
-  body("sizes.*.size")
+    .trim()
+    .isLength({ min: 2, max: 20 })
+    .withMessage("Each category must be between 2 and 20 characters"),
+  body("sizes")
     .optional()
-    .trim()
-    .trim()
-    .isString()
-    .withMessage("Size must be a string")
-    .notEmpty()
-    .withMessage("Size is required")
-    .isIn(["XS", "S", "M", "L", "XL", "XXL"])
+    .isArray({ min: 1, max: SIZES.length })
+    .withMessage("Add at least one size")
+    .custom(uniqueSizes),
+  body("sizes.*.size")
+    .isIn(SIZES)
     .withMessage("Size must be one of XS, S, M, L, XL, XXL"),
   body("sizes.*.stock")
-    .optional()
-    .trim()
-    .isInt({ min: 0 })
-    .withMessage("Stock must be an integer")
-    .notEmpty()
-    .withMessage("Stock is required"),
+    .isInt({ min: 0, max: 100000 })
+    .withMessage("Stock must be a whole number of 0 or more")
+    .toInt(),
   validateRequest,
 ];

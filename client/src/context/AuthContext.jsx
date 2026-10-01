@@ -28,6 +28,13 @@ export function AuthProvider({ children }) {
     loadMe();
   }, [loadMe]);
 
+  // the API client clears the token when the server rejects it
+  useEffect(() => {
+    const onSignedOut = () => setUser(null);
+    window.addEventListener("hush:signed-out", onSignedOut);
+    return () => window.removeEventListener("hush:signed-out", onSignedOut);
+  }, []);
+
   const login = async (email, password) => {
     setError("");
     const { user, token } = await api.login({ email, password });

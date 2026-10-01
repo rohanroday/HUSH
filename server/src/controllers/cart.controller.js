@@ -6,7 +6,7 @@ export async function addToCart(req, res) {
   const { size: productSize, quantity } = req.body;
 
   const product = await productModel.findById(productId);
-  if (!product) {
+  if (!product || !product.isPublished) {
     return res.status(404).json({ message: "Product not found" });
   }
 
@@ -19,9 +19,11 @@ export async function addToCart(req, res) {
     return res.status(400).json({ message: "Quantity exceeds stock" });
   }
 
-  const cart =
-    (await cartModel.findOne({ userId: req.user.id })) ??
-    (await cartModel.create({ userId: req.user.id }));
+  const cart = await cartModel.findOneAndUpdate(
+    { userId: req.user.id },
+    { $setOnInsert: { userId: req.user.id, products: [] } },
+    { upsert: true, new: true }
+  );
 
   const productInCart = cart.products.find(
     (p) => productId === p.productId.toString() && p.size === productSize
@@ -111,9 +113,13 @@ export async function removeProductFromCart(req, res) {
 
 export async function getCart(req, res) {
   const user = req.user;
-  const cart =
-    (await cartModel.findOne({ userId: user.id }).populate("products.productId")) ||
-    (await cartModel.create({ userId: user.id }));
+  const cart = await cartModel
+    .findOneAndUpdate(
+      { userId: user.id },
+      { $setOnInsert: { userId: user.id, products: [] } },
+      { upsert: true, new: true }
+    )
+    .populate("products.productId");
 
   // drop items whose product has since been deleted
   const missing = cart.products.filter((item) => !item.productId);

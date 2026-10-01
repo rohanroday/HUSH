@@ -1,12 +1,17 @@
 {
   "name": "server",
   "version": "1.0.0",
-  "description": "",
+  "description": "HUSH store API",
   "main": "server.js",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "seed": "node src/script/seed.js"
+    "create-seller": "node src/script/create-seller.js",
+    "reset-store": "node src/script/reset-store.js"
   },
   "keywords": [],
   "author": "",

@@ -199,6 +199,10 @@ export default function Products({ products, onChanged, onAdd }) {
             onSaved={onChanged}
             onImagesChanged={onChanged}
             onCancel={() => setEditingId(null)}
+            onDeleted={async () => {
+              setEditingId(null);
+              await onChanged();
+            }}
           />
         </Drawer>
       )}

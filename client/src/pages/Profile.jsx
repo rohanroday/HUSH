@@ -2,14 +2,15 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../api/client";
-import { formatPrice } from "../components/ProductCard";
+import ProductCard, { formatPrice } from "../components/ProductCard";
+import { useWishlist } from "../context/WishlistContext";
+import { useProducts } from "../context/ProductsContext";
 import { StatusBadge, StatusTracker } from "../components/OrderStatus";
 
 const SIDEBAR = [
   { key: "orders", label: "My Orders" },
   { key: "profile", label: "My Profile" },
   { key: "wishlist", label: "Wishlist" },
-  { key: "addresses", label: "Addresses" },
   { key: "settings", label: "Settings" },
 ];
 
@@ -18,7 +19,7 @@ const ORDER_TABS = ["All", "PLACED", "SHIPPED", "DELIVERED", "CANCELLED"];
 export default function Profile() {
   const { user, loading, logout } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
-  const tab = searchParams.get("tab") || "orders";
+  const tab = SIDEBAR.some((s) => s.key === searchParams.get("tab")) ? searchParams.get("tab") : "orders";
 
   if (loading) {
     return <p className="px-4 py-24 text-center text-sm text-stone">Loading…</p>;
@@ -74,7 +75,6 @@ export default function Profile() {
           {tab === "profile" && <ProfilePanel user={user} />}
           {tab === "orders" && <OrdersPanel />}
           {tab === "wishlist" && <WishlistPanel />}
-          {tab === "addresses" && <AddressesPanel />}
           {tab === "settings" && <SettingsPanel />}
         </div>
       </div>
@@ -420,28 +420,110 @@ function OrderCard({ order, onChanged, onNotice }) {
 }
 
 function WishlistPanel() {
-  return (
-    <div className="border border-line bg-cream-dark p-8 text-center text-sm text-stone">
-      Wishlist items you save while browsing will show up here. The current backend
-      doesn't persist a wishlist yet — this is a UI placeholder for that feature.
-    </div>
-  );
-}
+  const { ids } = useWishlist();
+  const { getById } = useProducts();
+  const [products, setProducts] = useState(null);
 
-function AddressesPanel() {
+  useEffect(() => {
+    let active = true;
+    Promise.all(ids.map((id) => getById(id))).then((list) => {
+      // pieces that were unpublished since they were saved are skipped
+      if (active) setProducts(list.filter(Boolean));
+    });
+    return () => {
+      active = false;
+    };
+  }, [ids, getById]);
+
+  if (products === null) {
+    return <p className="text-sm text-stone">Loading your wishlist…</p>;
+  }
+
+  if (products.length === 0) {
+    return (
+      <div className="border border-line bg-cream-dark p-8 text-center text-sm text-stone">
+        Tap the heart on any piece to save it here for later.
+        <Link to="/shop" className="mt-4 block font-medium text-ink underline">
+          Browse the collection
+        </Link>
+      </div>
+    );
+  }
+
   return (
-    <div className="border border-line bg-cream-dark p-8 text-center text-sm text-stone">
-      Saved addresses aren't stored by the backend yet — for now, enter your address
-      each time you check out.
+    <div className="grid grid-cols-2 gap-x-4 gap-y-10 lg:grid-cols-3">
+      {products.map((p, i) => (
+        <ProductCard key={p._id} product={p} index={i} />
+      ))}
     </div>
   );
 }
 
 function SettingsPanel() {
+  const [form, setForm] = useState({ current: "", next: "", confirm: "" });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [done, setDone] = useState("");
+
+  const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setError("");
+    setDone("");
+    if (form.next !== form.confirm) {
+      setError("The new passwords don't match.");
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await api.changePassword(form.current, form.next);
+      setDone(res.message);
+      setForm({ current: "", next: "", confirm: "" });
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
-    <div className="border border-line p-6 text-sm text-stone">
-      Account settings (password reset, notification preferences) aren't exposed by
-      the backend API yet.
-    </div>
+    <form onSubmit={submit} className="max-w-md border border-line p-6">
+      <h2 className="text-sm font-semibold text-ink">Change password</h2>
+      <div className="mt-5 space-y-4">
+        {[
+          ["current", "Current password", "current-password"],
+          ["next", "New password", "new-password"],
+          ["confirm", "Confirm new password", "new-password"],
+        ].map(([key, label, autoComplete]) => (
+          <label key={key} className="block text-sm">
+            <span className="mb-2 block text-xs font-medium text-ink">{label}</span>
+            <input
+              type="password"
+              required
+              minLength={key === "current" ? undefined : 6}
+              maxLength={72}
+              autoComplete={autoComplete}
+              value={form[key]}
+              onChange={set(key)}
+              className="field"
+            />
+          </label>
+        ))}
+      </div>
+      {error && (
+        <p role="alert" className="mt-4 border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-900">
+          {error}
+        </p>
+      )}
+      {done && (
+        <p role="status" className="mt-4 border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-900">
+          {done}
+        </p>
+      )}
+      <button type="submit" disabled={saving} className="btn btn-primary mt-6">
+        {saving ? "Saving…" : "Update password"}
+      </button>
+    </form>
   );
 }

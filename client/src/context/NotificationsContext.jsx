@@ -6,7 +6,7 @@ import { useAuth } from "./AuthContext";
 const NotificationsContext = createContext(null);
 const POLL_MS = 30000;
 
-// Sellers get alerts for new paid orders, cancellations and low stock. This
+// Sellers get alerts for new paid orders, cancellations, customer messages and low stock. This
 // polls quietly in the background and pops a toast when something new lands.
 export function NotificationsProvider({ children }) {
   const { user } = useAuth();
@@ -85,7 +85,8 @@ export function NotificationsProvider({ children }) {
 }
 
 function Toast({ notification, onClose }) {
-  const tab = notification.type === "LOW_STOCK" ? "products" : "orders";
+  const tab =
+    notification.type === "LOW_STOCK" ? "products" : notification.type === "CONTACT_MESSAGE" ? "alerts" : "orders";
   return (
     <div
       role="status"
@@ -102,7 +103,7 @@ function Toast({ notification, onClose }) {
             onClick={onClose}
             className="mt-3 inline-block text-xs font-semibold text-cream underline underline-offset-4"
           >
-            {tab === "orders" ? "Open orders" : "Open products"}
+            {tab === "orders" ? "Open orders" : tab === "products" ? "Open products" : "Read message"}
           </Link>
         </div>
         <button

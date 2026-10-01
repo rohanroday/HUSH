@@ -92,7 +92,10 @@ export default function Shop() {
     if (sizes.length) {
       result = result.filter((p) => p.sizes.some((s) => sizes.includes(s.size) && s.stock > 0));
     }
-    result = result.filter((p) => p.price.amount <= maxPrice);
+    // the slider's top stop means "any price", including pieces above it
+    if (maxPrice < MAX_PRICE) {
+      result = result.filter((p) => p.price.amount <= maxPrice);
+    }
 
     const sorted = [...result];
     if (sortBy === "price-asc") sorted.sort((a, b) => a.price.amount - b.price.amount);
@@ -250,7 +253,14 @@ export default function Shop() {
             </p>
           )}
 
-          {!loading && !error && filtered.length === 0 && (
+          {!loading && !error && allProducts.length === 0 && (
+            <div className="border border-line bg-paper px-6 py-16 text-center">
+              <p className="font-display text-3xl font-black uppercase text-ink">The first drop is coming</p>
+              <p className="mt-2 text-sm text-stone">New pieces are being photographed right now. Check back soon.</p>
+            </div>
+          )}
+
+          {!loading && !error && allProducts.length > 0 && filtered.length === 0 && (
             <div className="border border-line bg-paper px-6 py-16 text-center">
               <p className="font-display text-3xl font-black uppercase text-ink">Nothing matches, yet</p>
               <p className="mt-2 text-sm text-stone">Try a different size or widen the price range.</p>

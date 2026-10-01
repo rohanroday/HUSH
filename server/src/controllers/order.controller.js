@@ -157,7 +157,7 @@ export async function updateOrderStatus(req, res) {
   }
 
   const { status } = req.body;
-  if (!(status in NEXT_STATUSES)) {
+  if (typeof status !== "string" || !Object.hasOwn(NEXT_STATUSES, status)) {
     return res.status(400).json({ message: "Invalid status" });
   }
   if (status === order.status) {

@@ -10,7 +10,6 @@ function initialForm(product) {
     title: product?.title || "",
     description: product?.description || "",
     amount: product ? String(product.price.amount) : "",
-    currency: product?.price.currency || "INR",
     category: (product?.category || []).join(", "),
     sizes: Object.fromEntries(SIZES.map((s) => [s, stockBySize[s] ?? ""])),
     enabledSizes: Object.fromEntries(SIZES.map((s) => [s, s in stockBySize])),
@@ -18,7 +17,7 @@ function initialForm(product) {
 }
 
 // Used both for creating a product and for editing an existing one.
-export default function ProductForm({ product, onSaved, onImagesChanged, onCancel }) {
+export default function ProductForm({ product, onSaved, onImagesChanged, onCancel, onDeleted }) {
   const isEdit = Boolean(product);
   const [form, setForm] = useState(() => initialForm(product));
   const [files, setFiles] = useState([]);
@@ -26,6 +25,21 @@ export default function ProductForm({ product, onSaved, onImagesChanged, onCance
   const [deletingImage, setDeletingImage] = useState(null);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState("");
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const deleteProduct = async () => {
+    setDeleting(true);
+    setError("");
+    try {
+      await api.deleteProduct(product._id);
+      await onDeleted?.();
+    } catch (err) {
+      setError(err.message);
+      setConfirmingDelete(false);
+      setDeleting(false);
+    }
+  };
 
   const existingImages = product?.images || [];
   const slotsLeft = MAX_IMAGES - existingImages.length;
@@ -70,12 +84,15 @@ export default function ProductForm({ product, onSaved, onImagesChanged, onCance
 
     if (sizes.length === 0) return setError("Turn on at least one size.");
     if (category.length === 0) return setError("Add at least one category.");
+    if (category.some((c) => c.length < 2 || c.length > 20)) {
+      return setError("Each category must be between 2 and 20 characters.");
+    }
     if (!isEdit && files.length === 0) return setError("Add at least one photo.");
 
     const data = new FormData();
     data.append("title", form.title.trim());
     data.append("description", form.description.trim());
-    data.append("price", JSON.stringify({ amount: Number(form.amount), currency: form.currency }));
+    data.append("price", JSON.stringify({ amount: Number(form.amount), currency: "INR" }));
     data.append("category", JSON.stringify(category));
     data.append("sizes", JSON.stringify(sizes));
     files.forEach((f) => data.append("images", f));
@@ -123,7 +140,7 @@ export default function ProductForm({ product, onSaved, onImagesChanged, onCance
         </label>
         <Input
           label="Categories"
-          hint="Separate with commas. Shoppers filter by these."
+          hint="Separate with commas. Shoppers filter by these; the home page tiles use Jackets, T-Shirts, Hoodies, Shirts, Jeans and Joggers."
           value={form.category}
           onChange={set("category")}
           placeholder="Men, T-Shirts"
@@ -132,16 +149,17 @@ export default function ProductForm({ product, onSaved, onImagesChanged, onCance
       </Section>
 
       <Section title="Price">
-        <div className="grid grid-cols-[1fr_120px] gap-3">
-          <Input label="Selling price" type="number" min="0" step="1" value={form.amount} onChange={set("amount")} required className="tabular" />
-          <label className="block">
-            <span className="mb-2 block text-xs font-medium text-ink">Currency</span>
-            <select value={form.currency} onChange={set("currency")} className="field">
-              <option value="INR">INR ₹</option>
-              <option value="USD">USD $</option>
-            </select>
-          </label>
-        </div>
+        <Input
+          label="Selling price (₹, inclusive of taxes)"
+          type="number"
+          min="1"
+          max="1000000"
+          step="1"
+          value={form.amount}
+          onChange={set("amount")}
+          required
+          className="tabular"
+        />
       </Section>
 
       <Section title="Sizes and stock" aside={<span className="tabular text-xs text-stone">{totalStock} units</span>}>
@@ -185,7 +203,7 @@ export default function ProductForm({ product, onSaved, onImagesChanged, onCance
               <img src={img.url} alt="" className="h-full w-full object-cover" />
               <button
                 type="button"
-                disabled={deletingImage === img.imageKitId || existingImages.length + files.length <= 1}
+                disabled={deletingImage === img.imageKitId || existingImages.length <= 1}
                 onClick={() => deleteImage(img.imageKitId)}
                 aria-label="Delete photo"
                 title={existingImages.length <= 1 ? "A product needs at least one photo" : "Delete photo"}
@@ -257,7 +275,28 @@ export default function ProductForm({ product, onSaved, onImagesChanged, onCance
             {isEdit ? "Close" : "Cancel"}
           </button>
         )}
+        {isEdit && onDeleted && !confirmingDelete && (
+          <button type="button" onClick={() => setConfirmingDelete(true)} className="btn ml-auto text-red-800 hover:bg-red-50">
+            Delete product
+          </button>
+        )}
       </div>
+
+      {confirmingDelete && (
+        <div className="border border-red-200 bg-red-50 p-4">
+          <p className="text-sm text-red-900">
+            Delete this product and its photos for good? This can't be undone. To just hide it from the shop, unpublish it instead.
+          </p>
+          <div className="mt-3 flex gap-2">
+            <button type="button" disabled={deleting} onClick={deleteProduct} className="btn bg-red-800 px-4! py-2! text-paper hover:bg-red-900">
+              {deleting ? "Deleting…" : "Yes, delete"}
+            </button>
+            <button type="button" disabled={deleting} onClick={() => setConfirmingDelete(false)} className="btn btn-outline px-4! py-2!">
+              Keep product
+            </button>
+          </div>
+        </div>
+      )}
     </form>
   );
 }
