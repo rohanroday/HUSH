@@ -121,7 +121,14 @@ export async function reconcileHeldOrder(order) {
   }
   const successful = payments.find((p) => p.status === "captured" || p.status === "authorized");
   if (successful) {
-    const captured = await ensureCaptured(successful);
+    let captured;
+    try {
+      captured = await ensureCaptured(successful);
+    } catch (err) {
+      // leave the hold in place; the next sweep will try the capture again
+      console.error(`could not capture payment for order ${order._id}:`, err?.error?.description || err.message);
+      return "unknown";
+    }
     await finalizePaidOrder(order, captured);
     return "paid";
   }

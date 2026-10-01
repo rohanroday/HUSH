@@ -50,7 +50,7 @@ export async function startCheckout(req, res) {
   const total = itemsTotal + config.SHIPPING_FEE;
   const order = await orderModel.create({
     userId,
-    address: req.body.address,
+    address: (({ house, street, city, state, zip, phone }) => ({ house, street, city, state, zip, phone }))(req.body.address),
     products: lines,
     shippingFee: config.SHIPPING_FEE,
     totalPrice: { amount: total, currency },
@@ -84,7 +84,7 @@ export async function startCheckout(req, res) {
       amount: razorpayOrder.amount,
       currency: razorpayOrder.currency,
       keyId: config.RAZORPAY_KEY_ID,
-      prefill: { name: buyer?.name ?? "", email: buyer?.email ?? "" },
+      prefill: { name: buyer?.name ?? "", email: buyer?.email ?? "", contact: order.address.phone ?? "" },
       holdMinutes: config.PAYMENT_HOLD_MINUTES,
     },
   });

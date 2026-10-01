@@ -7,12 +7,14 @@ const TYPE_META = {
   ORDER_CANCELLED: { label: "Cancelled", dot: "bg-stone", tab: "orders" },
   LOW_STOCK: { label: "Stock", dot: "bg-amber-500", tab: "products" },
   CANCEL_REQUEST: { label: "Request", dot: "bg-red-700", tab: "orders" },
+  CONTACT_MESSAGE: { label: "Message", dot: "bg-sky-700", tab: "alerts" },
 };
 
 export function NotificationItem({ notification, compact = false }) {
   const { markRead } = useNotifications();
   const navigate = useNavigate();
   const meta = TYPE_META[notification.type] ?? TYPE_META.NEW_ORDER;
+  const isMessage = notification.type === "CONTACT_MESSAGE";
 
   const open = () => {
     if (!notification.read) markRead(notification._id);
@@ -38,13 +40,26 @@ export function NotificationItem({ notification, compact = false }) {
             <span className="shrink-0 text-[11px] text-stone">{timeAgo(notification.createdAt)}</span>
           </span>
           {notification.body && (
-            <span className={`mt-0.5 block text-xs leading-relaxed text-stone ${compact ? "truncate" : ""}`}>
+            <span
+              className={`mt-0.5 block text-xs leading-relaxed text-stone ${
+                compact ? "truncate" : isMessage ? "whitespace-pre-line break-words" : ""
+              }`}
+            >
               {notification.body}
             </span>
           )}
         </span>
         {!notification.read && <span className="sr-only">(unread)</span>}
       </button>
+      {isMessage && notification.replyTo && !compact && (
+        <a
+          href={`mailto:${notification.replyTo}?subject=${encodeURIComponent(`Re: ${notification.title}`)}`}
+          onClick={() => !notification.read && markRead(notification._id)}
+          className="mb-4 ml-10 inline-block text-xs font-medium text-ink underline underline-offset-4"
+        >
+          Reply to {notification.replyTo}
+        </a>
+      )}
     </li>
   );
 }
@@ -69,7 +84,7 @@ export default function Alerts() {
         <div className="px-6 py-20 text-center">
           <p className="font-display text-4xl font-black uppercase text-ink">All quiet</p>
           <p className="mx-auto mt-2 max-w-sm text-sm text-stone">
-            You'll be notified here when a customer pays for your pieces, cancels an order, or a size runs low.
+            You'll be notified here when a customer pays for your pieces, cancels an order, sends you a message, or a size runs low.
           </p>
         </div>
       ) : (

@@ -220,6 +220,11 @@ function OrderRow({ order, open, onToggle, onChanged }) {
                 <span className="block">
                   {order.address.city}, {order.address.state} {order.address.zip}
                 </span>
+                {order.address.phone && (
+                  <a href={`tel:+91${order.address.phone}`} className="tabular mt-1 block text-xs text-stone hover:text-ink">
+                    +91 {order.address.phone}
+                  </a>
+                )}
               </dd>
               <dt className="text-stone">Payment</dt>
               <dd>

@@ -27,6 +27,11 @@ async function request(path, { method = "GET", body, isFormData = false } = {}) 
   const data = contentType.includes("application/json") ? await res.json().catch(() => ({})) : null;
 
   if (!res.ok) {
+    // an expired or revoked session: sign out everywhere in the app
+    if (res.status === 401 && token) {
+      setToken(null);
+      window.dispatchEvent(new Event("hush:signed-out"));
+    }
     const message =
       (data && Array.isArray(data.errors) && data.errors.join(", ")) ||
       (data && Array.isArray(data.message) && data.message.map((m) => m.message || m).join(", ")) ||
@@ -42,6 +47,8 @@ export const api = {
   register: (payload) => request("/auth/register", { method: "POST", body: payload }),
   login: (payload) => request("/auth/login", { method: "POST", body: payload }),
   me: () => request("/auth/me"),
+  changePassword: (currentPassword, newPassword) =>
+    request("/auth/password", { method: "PATCH", body: { currentPassword, newPassword } }),
 
   getProducts: (page = 1) => request(`/products?page=${page}`),
   getProduct: (id) => request(`/products/${id}`),
@@ -49,6 +56,7 @@ export const api = {
   createProduct: (formData) => request("/products/create", { method: "POST", body: formData, isFormData: true }),
   updateProduct: (id, formData) => request(`/products/update/${id}`, { method: "PATCH", body: formData, isFormData: true }),
   togglePublish: (id) => request(`/products/publish/${id}`, { method: "PATCH" }),
+  deleteProduct: (id) => request(`/products/${id}`, { method: "DELETE" }),
   deleteImage: (id, imageId) => request(`/products/image/${id}/${imageId}`, { method: "DELETE" }),
 
   getCart: () => request("/cart"),
@@ -75,6 +83,8 @@ export const api = {
   getNotifications: () => request("/notifications"),
   markNotificationRead: (id) => request(`/notifications/${id}/read`, { method: "PATCH" }),
   markAllNotificationsRead: () => request("/notifications/read-all", { method: "PATCH" }),
+
+  sendContactMessage: (payload) => request("/contact", { method: "POST", body: payload }),
 };
 
 export function setToken(token) {

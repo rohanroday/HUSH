@@ -1,0 +1,14 @@
+{
+  "name": "hush",
+  "private": true,
+  "description": "HUSH menswear store: React storefront (client/) and Express API (server/)",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "npm ci --prefix client --include=dev && npm run build --prefix client && npm ci --prefix server --omit=dev",
+    "start": "npm start --prefix server",
+    "create-seller": "npm run create-seller --prefix server --",
+    "reset-store": "npm run reset-store --prefix server --"
+  }
+}

@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { useState } from "react";
+import { useWishlist } from "../context/WishlistContext";
 
 function formatPrice(price) {
   if (!price) return "";
@@ -8,7 +8,8 @@ function formatPrice(price) {
 }
 
 export default function ProductCard({ product, index = 0 }) {
-  const [wished, setWished] = useState(false);
+  const wishlist = useWishlist();
+  const wished = wishlist.has(product._id);
   const [cover, alt] = [product.images?.[0]?.url, product.images?.[1]?.url];
   const stock = (product.sizes || []).reduce((n, s) => n + s.stock, 0);
   const sizes = (product.sizes || []).filter((s) => s.stock > 0).map((s) => s.size);
@@ -55,7 +56,7 @@ export default function ProductCard({ product, index = 0 }) {
           type="button"
           aria-label={wished ? "Remove from wishlist" : "Save to wishlist"}
           aria-pressed={wished}
-          onClick={() => setWished((w) => !w)}
+          onClick={() => wishlist.toggle(product._id)}
           className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-paper/90 text-ink backdrop-blur transition-transform duration-150 ease-[var(--ease-out)] active:scale-90"
         >
           <svg width="15" height="15" viewBox="0 0 24 24" fill={wished ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.6" aria-hidden="true">

@@ -1,5 +1,29 @@
 import productModel from "../models/product.model.js";
+import orderModel from "../models/order.model.js";
 import {uploadImage,deleteFile} from "../services/storage.service.js"
+
+const PAGE_SIZE = 20;
+
+// Uploads every file or none: if one upload fails, the ones that already
+// made it to ImageKit are deleted again so nothing is left orphaned.
+async function uploadAll(files,startOrder){
+    const results = await Promise.allSettled(files.map((file)=>{
+        const safeName = file.originalname.replace(/[^\w.-]+/g,"-").slice(-80);
+        return uploadImage(file.buffer.toString("base64"),`${Date.now()}-${safeName}`);
+    }));
+    const failed = results.find((r)=>r.status === "rejected");
+    if(failed){
+        await Promise.allSettled(
+            results.filter((r)=>r.status === "fulfilled").map((r)=>deleteFile(r.value.fileId))
+        );
+        throw failed.reason;
+    }
+    return results.map((r,index)=>({
+        url:r.value.url,
+        imageKitId:r.value.fileId,
+        order:startOrder + index,
+    }));
+}
 
 // Keeps ?page= within 1..totalPages (and handles missing / non-numeric values)
 function clampPage(rawPage,totalPages){
@@ -26,15 +50,13 @@ export async function createProduct(req,res){
     if(error.length > 0){
         return res.status(400).json({message:error});
     }
-    const urls = await Promise.all(files.map(async (file,index)=>{
-         const fileName = `${Date.now()}-${file.originalname}`;
-         const response = await uploadImage(file.buffer.toString("base64"),fileName);
-         return {
-            url:response.url,
-            imageKitId:response.fileId,
-            order:index+1
-         };
-    }))
+    let urls;
+    try{
+        urls = await uploadAll(files,1);
+    }catch(err){
+        console.error("image upload failed:",err.message);
+        return res.status(502).json({message:"Couldn't upload the images. Please try again."});
+    }
 
     const product = await productModel.create({
         title,
@@ -88,25 +110,19 @@ export async function updateProduct(req,res){
         })
     }
     if(req.files && req.files.length>0){
-        const urls = await Promise.all(req.files.map(async (file, index) => {
-
-            const fileName = `${Date.now()}-${file.originalname}`
-            const response = await uploadImage(file.buffer.toString("base64"), fileName)
-
-            return {
-                url: response.url,
-                imageKitId: response.fileId,
-                order: product.images.length + index + 1,
-            }
-        }))
-
-        product.images.push(...urls)
+        const lastOrder = product.images.reduce((max,img)=>Math.max(max,img.order),0);
+        try{
+            product.images.push(...await uploadAll(req.files,lastOrder + 1));
+        }catch(err){
+            console.error("image upload failed:",err.message);
+            return res.status(502).json({message:"Couldn't upload the images. Please try again."});
+        }
     }
 
     const {title,price,description,category,sizes} = req.body;
-    
+
     if(title) product.title = title;
-   if(price) product.price=price;
+    if(price) product.price = { amount:price.amount, currency:price.currency || "INR" };
     if(description) product.description = description;
     if(category) product.category = category;
     if(sizes) product.sizes = sizes;
@@ -139,15 +155,15 @@ export async function getProducts(req,res){
         isPublished:true
     });
 
-    const totalPages = Math.ceil(totalProduct/20);
+    const totalPages = Math.ceil(totalProduct/PAGE_SIZE);
 
     const page = clampPage(req.query.page,totalPages);
 
-    const skip = (page-1)*20;
+    const skip = (page-1)*PAGE_SIZE;
 
     const products = await productModel.find({
         isPublished:true
-    }).skip(skip).limit(20);
+    }).sort({createdAt:-1,_id:-1}).skip(skip).limit(PAGE_SIZE).lean();
     res.status(200).json({
         message:"product feteched successfully",
         data:{
@@ -190,6 +206,11 @@ export async function togglePublishProduct(req,res) {
             message:"Only authenticated sellers can publish products"
         })
     }
+    if(!product.isPublished && product.images.length === 0){
+        return res.status(400).json({
+            message:"Add at least one photo before publishing"
+        })
+    }
     await productModel.findByIdAndUpdate({
         _id:productId
     },{
@@ -229,11 +250,16 @@ export async function deleteImage(req,res){
             message:"Image not found"
         })
     }
+    if(product.images.length <= 1){
+        return res.status(400).json({
+            message:"A product needs at least one photo. Upload another before deleting this one."
+        })
+    }
     try{
         await deleteFile(imageId);
     }catch(err){
-        // the file may already be gone from ImageKit (or be seed data that was
-        // never uploaded there); still remove it from the product
+        // the file may already be gone from ImageKit; still remove it from
+        // the product
         console.warn(`ImageKit delete failed for ${imageId}: ${err.message}`);
     }
     await productModel.findByIdAndUpdate({
@@ -250,6 +276,40 @@ export async function deleteImage(req,res){
     })
 }
 
+
+// Removes a product and its photos for good. Products that have been ordered
+// stay (orders and refunds still refer to them); those can only be unpublished.
+export async function deleteProduct(req,res){
+    const user = req.user;
+    if(user.role !== "seller"){
+        return res.status(403).json({message:"Only sellers can delete products"});
+    }
+    const product = await productModel.findById(req.params.id);
+    if(!product){
+        return res.status(404).json({message:"Product not found"});
+    }
+    if(product.seller.toString() !== user.id){
+        return res.status(403).json({message:"Only authenticated sellers can delete products"});
+    }
+    // abandoned checkouts (never paid) don't count as orders
+    const ordered = await orderModel.exists({
+        "products.product.productId":product._id,
+        "payment.status":{ $ne:"FAILED" },
+    });
+    if(ordered){
+        return res.status(409).json({
+            message:"This product has orders, so it can't be deleted. Unpublish it to take it out of the shop instead."
+        });
+    }
+    await productModel.deleteOne({_id:product._id});
+    const results = await Promise.allSettled(product.images.map((img)=>deleteFile(img.imageKitId)));
+    results.forEach((r,i)=>{
+        if(r.status === "rejected"){
+            console.warn(`ImageKit delete failed for ${product.images[i].imageKitId}: ${r.reason?.message}`);
+        }
+    });
+    res.status(200).json({message:"Product deleted"});
+}
 
 export async function getProductsBySeller(req,res){
     const user = req.user;

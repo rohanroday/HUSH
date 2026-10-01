@@ -26,6 +26,10 @@ const orderSchema = new mongoose.Schema({
             type:String,
             required:true,
         },
+        // contact number for the courier
+        phone:{
+            type:String,
+        },
     },
   products:[
     {

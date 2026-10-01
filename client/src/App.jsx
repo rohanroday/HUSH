@@ -3,6 +3,7 @@ import { AuthProvider } from "./context/AuthContext";
 import { CartProvider } from "./context/CartContext";
 import { ProductsProvider } from "./context/ProductsContext";
 import { NotificationsProvider } from "./context/NotificationsContext";
+import { WishlistProvider } from "./context/WishlistContext";
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
 import ScrollReveal from "./components/Reveal";
@@ -25,6 +26,7 @@ export default function App() {
         <ProductsProvider>
           <CartProvider>
             <NotificationsProvider>
+            <WishlistProvider>
             <div className="flex min-h-dvh flex-col bg-cream">
               <ScrollReveal />
               <Navbar />
@@ -46,6 +48,7 @@ export default function App() {
               </main>
               <Footer />
             </div>
+            </WishlistProvider>
             </NotificationsProvider>
           </CartProvider>
         </ProductsProvider>

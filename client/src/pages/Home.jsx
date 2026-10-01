@@ -96,7 +96,7 @@ export default function Home() {
       <Ticker />
       <Categories counts={counts} loading={loading} />
       <NewArrivals products={newest} loading={loading} error={error} />
-      <BlackEdit products={blackEdit} loading={loading} />
+      {(loading || blackEdit.length > 0) && <BlackEdit products={blackEdit} loading={loading} />}
       <Promises />
       <Closer signedIn={Boolean(user)} />
     </div>
@@ -229,7 +229,7 @@ function Categories({ counts, loading }) {
                   {tile.label}
                 </p>
                 <p className="tabular mt-1.5 text-xs text-paper/80">
-                  {loading ? " " : `${counts[tile.label] || 0} pieces`}
+                  {loading ? " " : counts[tile.label] ? `${counts[tile.label]} ${counts[tile.label] === 1 ? "piece" : "pieces"}` : "Coming soon"}
                 </p>
               </div>
               <span className="hidden h-10 w-10 items-center justify-center rounded-full bg-paper text-ink transition-transform duration-300 ease-out group-hover:-rotate-45 md:flex">
@@ -289,6 +289,12 @@ function NewArrivals({ products, loading, error }) {
         {error && (
           <p className="border border-line p-6 text-sm text-stone">
             We couldn't load the collection just now. Refresh the page to try again.
+          </p>
+        )}
+
+        {!loading && !error && products.length === 0 && (
+          <p className="border border-line p-6 text-sm text-stone">
+            The first drop is being photographed right now. Check back soon.
           </p>
         )}
 

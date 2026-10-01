@@ -1,15 +1,21 @@
 import app from './src/app/app.js';
 import {connectDB} from './src/config/db.js';
-import config from './src/config/config.js';
+import config, {assertRequiredConfig} from './src/config/config.js';
 import {startPaymentSweeper} from './src/services/checkout.service.js';
 
-if (!config.RAZORPAY_KEY_ID || !config.RAZORPAY_KEY_SECRET) {
-  console.warn('RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET are not set: checkout will fail');
-}
+assertRequiredConfig();
 
 await connectDB();
 startPaymentSweeper();
 
-app.listen(3000, () => {
-  console.log('Server is running on port 3000');
+const server = app.listen(config.PORT, () => {
+  console.log(`Server is running on port ${config.PORT}`);
 });
+
+// Hosting platforms send SIGTERM on redeploy; finish in-flight requests first.
+for (const signal of ['SIGTERM', 'SIGINT']) {
+  process.on(signal, () => {
+    server.close(() => process.exit(0));
+    setTimeout(() => process.exit(0), 10000).unref();
+  });
+}
