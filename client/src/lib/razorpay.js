@@ -23,8 +23,9 @@ export function loadRazorpay() {
 
 // Opens the checkout modal and settles with how it ended:
 // { status: "paid", response } | { status: "dismissed", lastError }.
-// A failed attempt keeps the modal open so the buyer can retry another method.
-export async function openCheckout({ keyId, razorpayOrderId, amount, currency, prefill, description }) {
+// A failed attempt keeps the modal open so the buyer can retry another method;
+// onFailed is told about each failure as it happens.
+export async function openCheckout({ keyId, razorpayOrderId, amount, currency, prefill, description, holdMinutes, onFailed }) {
   const Razorpay = await loadRazorpay();
   return new Promise((resolve) => {
     let lastError = null;
@@ -37,6 +38,8 @@ export async function openCheckout({ keyId, razorpayOrderId, amount, currency, p
       description,
       prefill,
       theme: { color: "#151411" },
+      // close the window by itself once the checkout can no longer be held
+      ...(holdMinutes ? { timeout: holdMinutes * 60 } : {}),
       handler: (response) => resolve({ status: "paid", response }),
       modal: {
         ondismiss: () => resolve({ status: "dismissed", lastError }),
@@ -45,6 +48,7 @@ export async function openCheckout({ keyId, razorpayOrderId, amount, currency, p
     });
     rzp.on("payment.failed", (event) => {
       lastError = event.error?.description || "The payment didn't go through.";
+      onFailed?.(lastError);
     });
     rzp.open();
   });

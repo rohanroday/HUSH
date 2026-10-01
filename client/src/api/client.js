@@ -4,7 +4,7 @@ function getToken() {
   return localStorage.getItem("hush_token");
 }
 
-async function request(path, { method = "GET", body, isFormData = false } = {}) {
+async function request(path, { method = "GET", body, isFormData = false, keepalive = false } = {}) {
   const headers = {};
   const token = getToken();
   if (token) headers.Authorization = `Bearer ${token}`;
@@ -15,6 +15,7 @@ async function request(path, { method = "GET", body, isFormData = false } = {}) 
     res = await fetch(`${BASE_URL}${path}`, {
       method,
       headers,
+      keepalive,
       body: body ? (isFormData ? body : JSON.stringify(body)) : undefined,
     });
   } catch (networkErr) {
@@ -78,7 +79,9 @@ export const api = {
   // Razorpay checkout: hold stock + create the payment, then confirm or release it.
   startCheckout: (address) => request("/payments/checkout", { method: "POST", body: { address } }),
   verifyPayment: (payload) => request("/payments/verify", { method: "POST", body: payload }),
-  abandonCheckout: (orderId) => request(`/payments/abandon/${orderId}`, { method: "POST" }),
+  // keepalive lets the request finish even while the page is being closed
+  abandonCheckout: (orderId, { keepalive = false } = {}) =>
+    request(`/payments/abandon/${orderId}`, { method: "POST", keepalive }),
 
   getNotifications: () => request("/notifications"),
   markNotificationRead: (id) => request(`/notifications/${id}/read`, { method: "PATCH" }),

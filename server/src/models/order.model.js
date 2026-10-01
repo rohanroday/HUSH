@@ -115,6 +115,8 @@ const orderSchema = new mongoose.Schema({
     paidAt:Date,
     refundId:String,
     refundedAt:Date,
+    // an abandoned checkout that was re-checked for a late payment
+    lateChecked:Boolean,
   },
 },{timestamps:true});
 

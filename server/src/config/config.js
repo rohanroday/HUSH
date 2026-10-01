@@ -18,8 +18,9 @@ const config = {
   TRUST_PROXY: Number(process.env.TRUST_PROXY) || (process.env.RENDER ? 3 : 1),
   // flat standard shipping charged on every order, in the order's currency
   SHIPPING_FEE: 99,
-  // unpaid checkouts hold stock for this long before it is released
-  PAYMENT_HOLD_MINUTES: 20,
+  // longest an unpaid checkout can hold stock (it is released sooner when the
+  // payment fails or the buyer closes the payment window or leaves the page)
+  PAYMENT_HOLD_MINUTES: 10,
 };
 
 // The server can't do anything useful without these; fail loudly at boot
