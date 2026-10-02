@@ -206,8 +206,11 @@ export async function releaseHeldOrder(order) {
 // Decides what happened to a checkout the buyer never confirmed: asks
 // Razorpay whether money actually arrived before giving the stock back.
 // Returns "paid", "released", or "unknown" when Razorpay can't be reached.
-export async function reconcileHeldOrder(order) {
+// With release: false an unpaid checkout keeps its hold ("waiting"): used to
+// confirm paid orders while the buyer may still be in the payment window.
+export async function reconcileHeldOrder(order, { release = true } = {}) {
   if (!order.payment?.razorpayOrderId) {
+    if (!release) return "waiting";
     return (await releaseHeldOrder(order)) ? "released" : "unknown";
   }
   let payments;
@@ -230,6 +233,7 @@ export async function reconcileHeldOrder(order) {
     await finalizePaidOrder(order, captured);
     return "paid";
   }
+  if (!release) return "waiting";
   await releaseHeldOrder(order);
   return "released";
 }
@@ -257,42 +261,75 @@ export async function refundIfPaid(order, reason) {
   return { refunded: true, refund };
 }
 
-// Checkouts left open (closed tab, lost connection) hold stock; sweep them.
-// Also double-checks released checkouts once the payment window can no longer
-// be open, in case money arrived after the stock went back on sale.
+// Background check on every checkout that hasn't been settled by the buyer's
+// own browser:
+// - still awaiting payment: ask Razorpay whether the money arrived, so a paid
+//   order reaches the seller within seconds even if the buyer's browser never
+//   reported back (closed tab, lost connection, phone killed the page);
+// - hold expired: release the stock (after the same check);
+// - already released: watch for a late payment while the payment window can
+//   still be open, then take one last look and stop.
 export function startPaymentSweeper() {
+  const SWEEP_MS = 20 * 1000;
   const holdMs = config.PAYMENT_HOLD_MINUTES * 60 * 1000;
   const lateCheckMs = holdMs + 10 * 60 * 1000;
+  let running = false;
+  let tick = 0;
+
   const sweep = async () => {
+    if (running) return;
+    running = true;
+    tick += 1;
     try {
-      const stale = await orderModel.find({
+      const now = Date.now();
+      // give the buyer's browser a few seconds to confirm the payment itself
+      const pending = await orderModel.find({
         status: "PAYMENT_PENDING",
-        createdAt: { $lt: new Date(Date.now() - holdMs) },
+        createdAt: { $lt: new Date(now - 15 * 1000) },
       });
-      for (const order of stale) {
-        const outcome = await reconcileHeldOrder(order);
-        console.log(`payment sweep: order ${order._id} -> ${outcome}`);
+      for (const order of pending) {
+        const expired = now - order.createdAt.getTime() >= holdMs;
+        const outcome = await reconcileHeldOrder(order, { release: expired });
+        if (outcome !== "waiting") console.log(`payment sweep: order ${order._id} -> ${outcome}`);
       }
 
-      const released = await orderModel.find({
-        ...RELEASED,
-        "payment.razorpayOrderId": { $exists: true },
-        "payment.lateChecked": { $ne: true },
-        createdAt: { $lt: new Date(Date.now() - lateCheckMs), $gt: new Date(Date.now() - 24 * 60 * 60 * 1000) },
-      });
-      for (const order of released) {
-        const outcome = await settleReleasedOrder(order);
-        if (outcome === "released") {
-          await orderModel.updateOne({ _id: order._id, ...RELEASED }, { $set: { "payment.lateChecked": true } });
-        } else {
-          console.log(`payment sweep: released order ${order._id} -> ${outcome}`);
+      // released checkouts cost a Razorpay call each, so look once a minute
+      if (tick % 3 === 1) {
+        // a refund that was claimed but never issued (the server restarted
+        // mid-way) goes back in the queue to be settled again
+        await orderModel.updateMany(
+          {
+            status: "CANCELLED",
+            "payment.status": "REFUND_PENDING",
+            "payment.refundId": { $exists: false },
+            updatedAt: { $lt: new Date(now - 2 * 60 * 1000) },
+          },
+          { $set: { "payment.status": "FAILED" }, $unset: { "payment.lateChecked": "" } }
+        );
+
+        const released = await orderModel.find({
+          ...RELEASED,
+          "payment.razorpayOrderId": { $exists: true },
+          "payment.lateChecked": { $ne: true },
+          createdAt: { $gt: new Date(now - 24 * 60 * 60 * 1000) },
+        });
+        for (const order of released) {
+          const outcome = await settleReleasedOrder(order);
+          if (outcome !== "released") {
+            console.log(`payment sweep: released order ${order._id} -> ${outcome}`);
+          } else if (now - order.createdAt.getTime() >= lateCheckMs) {
+            // the payment window can't still be open: stop watching this one
+            await orderModel.updateOne({ _id: order._id, ...RELEASED }, { $set: { "payment.lateChecked": true } });
+          }
         }
       }
     } catch (err) {
       console.error("payment sweep failed:", err.message);
+    } finally {
+      running = false;
     }
   };
-  const timer = setInterval(sweep, 60 * 1000);
+  const timer = setInterval(sweep, SWEEP_MS);
   timer.unref();
   sweep();
 }
