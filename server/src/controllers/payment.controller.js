@@ -135,6 +135,11 @@ export async function verifyPayment(req, res) {
     }
     payment = await ensureCaptured(payment);
   } catch (err) {
+    // the background check may have confirmed it in the meantime
+    const settled = await orderModel.findById(order._id);
+    if (settled?.payment?.status === "PAID") {
+      return res.status(200).json({ message: "Payment confirmed", data: { order: settled } });
+    }
     return res.status(502).json({
       message: `Couldn't confirm the payment with Razorpay: ${describeRazorpayError(err)}. If you were charged, your order will be confirmed automatically within a few minutes.`,
     });
