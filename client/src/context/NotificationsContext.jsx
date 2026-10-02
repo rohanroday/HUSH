@@ -4,10 +4,13 @@ import { api } from "../api/client";
 import { useAuth } from "./AuthContext";
 
 const NotificationsContext = createContext(null);
-const POLL_MS = 30000;
+const POLL_MS = 5000;
+// a background tab still checks, so the unread count in its title keeps up
+const BACKGROUND_POLL_MS = 30000;
 
 // Sellers get alerts for new paid orders, cancellations, customer messages and low stock. This
-// polls quietly in the background and pops a toast when something new lands.
+// polls every few seconds in the background and pops a toast when something
+// new lands, so the dashboard updates without a page refresh.
 export function NotificationsProvider({ children }) {
   const { user } = useAuth();
   const isSeller = user?.role === "seller";
@@ -15,9 +18,12 @@ export function NotificationsProvider({ children }) {
   const [unread, setUnread] = useState(0);
   const [toast, setToast] = useState(null);
   const seen = useRef(null);
+  const busy = useRef(false);
 
   const refresh = useCallback(async () => {
-    if (!isSeller) return;
+    // skip a tick rather than stack requests on a slow connection
+    if (!isSeller || busy.current) return;
+    busy.current = true;
     try {
       const { data } = await api.getNotifications();
       setNotifications(data.notifications);
@@ -31,6 +37,8 @@ export function NotificationsProvider({ children }) {
       seen.current = ids;
     } catch {
       // keep the last good list; the next poll will try again
+    } finally {
+      busy.current = false;
     }
   }, [isSeller]);
 
@@ -41,15 +49,23 @@ export function NotificationsProvider({ children }) {
       seen.current = null;
       return;
     }
-    refresh();
+    let last = Date.now();
+    const check = () => {
+      last = Date.now();
+      refresh();
+    };
+    check();
     const timer = setInterval(() => {
-      if (document.visibilityState === "visible") refresh();
+      if (document.visibilityState === "visible" || Date.now() - last >= BACKGROUND_POLL_MS) check();
     }, POLL_MS);
-    const onFocus = () => refresh();
-    window.addEventListener("focus", onFocus);
+    // coming back to the tab or window: catch up straight away
+    const onVisible = () => document.visibilityState === "visible" && check();
+    window.addEventListener("focus", check);
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
       clearInterval(timer);
-      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("focus", check);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, [isSeller, refresh]);
 
