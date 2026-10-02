@@ -42,7 +42,12 @@ app.use('/api', (req, res, next) => {
 });
 
 app.use(express.json({ limit: '100kb' }));
-app.use(morgan(config.NODE_ENV === 'production' ? 'combined' : 'dev'));
+app.use(
+  morgan(config.NODE_ENV === 'production' ? 'combined' : 'dev', {
+    // the seller dashboard polls this every few seconds; don't flood the logs
+    skip: (req, res) => req.method === 'GET' && req.originalUrl === '/api/notifications' && res.statusCode < 400,
+  })
+);
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 

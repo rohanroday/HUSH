@@ -123,8 +123,20 @@ function OrdersPanel() {
     }
   }, []);
 
+  // keep the list current (packed, shipped, refunded...) without a page refresh
   useEffect(() => {
     load();
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") load();
+    }, 15000);
+    const onVisible = () => document.visibilityState === "visible" && load();
+    window.addEventListener("focus", load);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("focus", load);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [load]);
 
   const filtered =

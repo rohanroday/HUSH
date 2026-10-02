@@ -297,10 +297,21 @@ export function startPaymentSweeper() {
   sweep();
 }
 
+const refundCheckedAt = new Map();
+
 // Refunds start "pending" at Razorpay and settle later. Whenever orders are
 // listed, ask about the ones still pending so the status catches up.
 export async function syncPendingRefunds(orders) {
-  const pending = orders.filter((o) => o.payment?.status === "REFUND_PENDING" && o.payment.refundId);
+  // order pages refresh themselves every few seconds; ask Razorpay about each
+  // refund at most once a minute
+  const now = Date.now();
+  const pending = orders.filter((o) => {
+    if (o.payment?.status !== "REFUND_PENDING" || !o.payment.refundId) return false;
+    const id = o._id.toString();
+    if (now - (refundCheckedAt.get(id) ?? 0) < 60 * 1000) return false;
+    refundCheckedAt.set(id, now);
+    return true;
+  });
   await Promise.all(
     pending.map(async (order) => {
       try {
@@ -308,6 +319,7 @@ export async function syncPendingRefunds(orders) {
         if (refund.status === "processed") {
           await orderModel.updateOne({ _id: order._id }, { $set: { "payment.status": "REFUNDED" } });
           order.payment.status = "REFUNDED";
+          refundCheckedAt.delete(order._id.toString());
         }
       } catch (err) {
         console.error(`refund sync for ${order._id} failed:`, err?.error?.description || err.message);

@@ -72,7 +72,7 @@ export default function Alerts() {
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-4">
         <p className="text-sm text-ink">
           <span className="tabular font-semibold">{unread}</span> unread
-          <span className="ml-2 text-xs text-stone">Checked every 30 seconds</span>
+          <span className="ml-2 text-xs text-stone">Updates automatically</span>
         </p>
         {unread > 0 && (
           <button type="button" onClick={markAllRead} className="text-xs font-medium text-ink underline-offset-4 hover:underline">
