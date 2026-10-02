@@ -86,7 +86,8 @@ export async function startCheckout(req, res) {
       amount: razorpayOrder.amount,
       currency: razorpayOrder.currency,
       keyId: config.RAZORPAY_KEY_ID,
-      prefill: { name: buyer?.name ?? "", email: buyer?.email ?? "", contact: order.address.phone ?? "" },
+      // Razorpay only accepts the number with its country code
+      prefill: { name: buyer?.name ?? "", email: buyer?.email ?? "", contact: order.address.phone ? `+91${order.address.phone}` : "" },
       holdMinutes: config.PAYMENT_HOLD_MINUTES,
     },
   });
